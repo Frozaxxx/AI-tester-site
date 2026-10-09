@@ -1,7 +1,12 @@
-"""Настройки сервиса из переменных окружения."""
+"""Настройки сервиса. Значения берутся из файла .env в корне проекта."""
 
-import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/projects"
-)
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file="../../.env", env_prefix="PROJECTS_", extra="ignore")
+
+    database_url: str
+
+
+settings = Settings()

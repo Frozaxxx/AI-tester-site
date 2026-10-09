@@ -1,19 +1,57 @@
+# У каждого сервиса своя база в своём контейнере.
+x-postgres: &postgres
+  image: postgres:17
+  healthcheck:
+    test: ["CMD", "pg_isready"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
 services:
-  postgres:
-    image: postgres:17
+  auth-db:
+    <<: *postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - auth-data:/var/lib/postgresql/data
+
+  projects-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: projects
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - projects-data:/var/lib/postgresql/data
+
+  runs-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: runs
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5434:5432"
+    volumes:
+      - runs-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  pgdata:
+  auth-data:
+  projects-data:
+  runs-data:

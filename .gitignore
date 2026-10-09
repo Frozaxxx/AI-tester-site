@@ -14,6 +14,7 @@ dist/
 
 # Секреты
 .env
+keys/
 
 # Артефакты прогонов
 test-results/

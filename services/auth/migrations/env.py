@@ -7,7 +7,7 @@ from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.config import DATABASE_URL
+from app.config import settings
 from app.infrastructure.db.models import Base
 
 config = context.config
@@ -19,7 +19,9 @@ target_metadata = Base.metadata
 
 def run_offline() -> None:
     """alembic upgrade head --sql: печатает SQL, не подключаясь к базе."""
-    context.configure(url=DATABASE_URL, target_metadata=target_metadata, literal_binds=True)
+    context.configure(
+        url=settings.database_url, target_metadata=target_metadata, literal_binds=True
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -31,7 +33,7 @@ def run_migrations(connection: Connection) -> None:
 
 
 async def run_online() -> None:
-    engine = create_async_engine(DATABASE_URL)
+    engine = create_async_engine(settings.database_url)
     async with engine.connect() as connection:
         await connection.run_sync(run_migrations)
     await engine.dispose()

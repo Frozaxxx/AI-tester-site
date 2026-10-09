@@ -11,7 +11,7 @@ class Base(DeclarativeBase):
     pass
 
 
-class User(Base):
+class UserModel(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -20,7 +20,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class RefreshToken(Base):
+class RefreshTokenModel(Base):
     """Храним только хэш токена: утечка базы не даёт войти от имени пользователя."""
 
     __tablename__ = "refresh_tokens"

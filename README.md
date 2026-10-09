@@ -34,16 +34,25 @@ tests/
 
 Python, Playwright, FastAPI, LangGraph, PostgreSQL, RabbitMQ, Redis, MinIO, Docker.
 
+## Ключ для JWT
+
+Сервис auth подписывает токены RSA-ключом. Ключ в git не хранится, создай его один раз:
+
+```
+openssl genrsa -out services/auth/keys/jwt_private.pem 2048
+```
+
 ## Запуск базы и миграций
 
 ```
-docker compose up -d postgres
-pip install "sqlalchemy[asyncio]" asyncpg alembic
+cp .env.example .env
+docker compose up -d
+pip install "sqlalchemy[asyncio]" asyncpg alembic pydantic-settings
 cd services/runs
 alembic upgrade head
 ```
 
-То же для `services/auth` и `services/projects`. Новая миграция после изменения моделей:
+То же для `services/auth` и `services/projects`. Базы: auth на порту 5432, projects на 5433, runs на 5434. Новая миграция после изменения моделей:
 
 ```
 alembic revision --autogenerate -m "что изменилось"
