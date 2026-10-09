@@ -38,7 +38,7 @@ class Scenario(Base):
 
 
 class Credential(Base):
-    """Тестовый аккаунт """
+    """Тестовый аккаунт"""
 
     __tablename__ = "credentials"
 

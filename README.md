@@ -33,3 +33,18 @@ tests/
 ## Стек
 
 Python, Playwright, FastAPI, LangGraph, PostgreSQL, RabbitMQ, Redis, MinIO, Docker.
+
+## Запуск базы и миграций
+
+```
+docker compose up -d postgres
+pip install "sqlalchemy[asyncio]" asyncpg alembic
+cd services/runs
+alembic upgrade head
+```
+
+То же для `services/auth` и `services/projects`. Новая миграция после изменения моделей:
+
+```
+alembic revision --autogenerate -m "что изменилось"
+```
