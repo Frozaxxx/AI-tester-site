@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Demo Shop{% endblock %}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; color: #1d1d1f; background: #fafafa; }
+    header { display: flex; gap: 16px; align-items: center; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e5e5e5; }
+    header .logo { font-weight: 700; margin-right: auto; text-decoration: none; color: inherit; }
+    main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; list-style: none; padding: 0; }
+    .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; }
+    .price { font-weight: 600; }
+    nav.pagination { display: flex; gap: 8px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="logo" href="/products">Demo Shop</a>
+    <a href="/products">Каталог</a>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} — Demo Shop{% endblock %}
+{% block content %}
+  <article class="card">
+    <h1>{{ product.name }}</h1>
+    <p>{{ product.description }}</p>
+    <p class="price">{{ "{:,}".format(product.price).replace(",", " ") }} ₽</p>
+  </article>
+{% endblock %}

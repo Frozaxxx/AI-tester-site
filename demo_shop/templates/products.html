@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Каталог — Demo Shop{% endblock %}
+{% block content %}
+  <h1>Каталог</h1>
+  <ul class="grid">
+    {% for p in products %}
+      <li class="card">
+        <h2><a href="/products/{{ p.id }}">{{ p.name }}</a></h2>
+        <p class="price">{{ "{:,}".format(p.price).replace(",", " ") }} ₽</p>
+      </li>
+    {% endfor %}
+  </ul>
+  <nav class="pagination" aria-label="Страницы каталога">
+    {% if page > 1 %}<a href="/products?page={{ page - 1 }}">Назад</a>{% endif %}
+    <span>Страница {{ page }} из {{ total_pages }}</span>
+    {% if page < total_pages %}<a href="/products?page={{ page + 1 }}">Вперёд</a>{% endif %}
+  </nav>
+{% endblock %}
