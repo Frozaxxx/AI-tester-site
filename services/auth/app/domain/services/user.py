@@ -6,13 +6,14 @@ from app.domain.entities.user import User
 from app.domain.exceptions import DomainError
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL_MAX_LENGTH = 254  # максимум по RFC 5321, влезает в колонку String(255)
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 128
 
 
 def normalize_email(raw: str) -> str:
     email = raw.strip().lower()
-    if not EMAIL_RE.match(email):
+    if len(email) > EMAIL_MAX_LENGTH or not EMAIL_RE.match(email):
         raise DomainError("Некорректный email")
     return email
 

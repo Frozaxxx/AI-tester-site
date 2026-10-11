@@ -9,7 +9,10 @@ def test_email_is_normalized() -> None:
     assert user.email == "andrey@example.com"
 
 
-@pytest.mark.parametrize("email", ["", "andrey", "andrey@", "@example.com", "a b@example.com"])
+@pytest.mark.parametrize(
+    "email",
+    ["", "andrey", "andrey@", "@example.com", "a b@example.com", "a" * 250 + "@example.com"],
+)
 def test_invalid_email(email: str) -> None:
     with pytest.raises(DomainError):
         create_user(email=email, password_hash="hash")

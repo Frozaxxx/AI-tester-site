@@ -27,6 +27,16 @@ def test_password_hash() -> None:
     assert not verify_password("wrong-password", hashed)
 
 
+def test_long_cyrillic_password() -> None:
+    """128 русских букв — 256 байт. bcrypt на таком падал, argon2 справляется."""
+    password = "я" * 128
+    assert verify_password(password, hash_password(password))
+
+
+def test_broken_hash_is_not_an_error() -> None:
+    assert not verify_password("secret123", "not-a-hash")
+
+
 def test_access_token_roundtrip(private_key_pem: str) -> None:
     issuer = JwtIssuer(private_key_pem, ttl=timedelta(minutes=15))
     user_id = uuid.uuid4()

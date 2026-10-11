@@ -1,11 +1,20 @@
-"""Хэширование паролей через bcrypt."""
+"""Хэширование паролей: argon2id, рекомендация OWASP.
 
-import bcrypt
+В отличие от bcrypt, у argon2 нет ограничения в 72 байта на длину пароля.
+"""
+
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
+
+_hasher = PasswordHasher()
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return _hasher.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode(), password_hash.encode())
+    try:
+        return _hasher.verify(password_hash, password)
+    except (VerificationError, InvalidHashError):
+        return False
