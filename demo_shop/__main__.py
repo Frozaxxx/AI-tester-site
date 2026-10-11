@@ -1,11 +1,10 @@
-"""Запуск: python -m demo_shop [--port 8000]"""
-
 import argparse
 
 import uvicorn
 
 
 def main() -> None:
+    """Запускает демо-магазин."""
     parser = argparse.ArgumentParser(description="Демо-магазин для AI-тестировщика")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)

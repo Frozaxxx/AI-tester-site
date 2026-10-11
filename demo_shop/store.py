@@ -1,5 +1,3 @@
-"""Хранилище демо-магазина в памяти. Для полигона база не нужна."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -9,7 +7,7 @@ from dataclasses import dataclass, field
 class Product:
     id: int
     name: str
-    price: int  # в рублях
+    price: int
     description: str
 
 
@@ -18,6 +16,7 @@ class Store:
     products: list[Product] = field(default_factory=list)
 
     def product(self, product_id: int) -> Product | None:
+        """Находит товар по id."""
         return next((p for p in self.products if p.id == product_id), None)
 
 
@@ -49,6 +48,7 @@ _CATALOG = [
 
 
 def seed_store() -> Store:
+    """Заполняет магазин тестовыми товарами."""
     products = [
         Product(id=i, name=name, price=price, description=desc)
         for i, (name, price, desc) in enumerate(_CATALOG, start=1)

@@ -1,9 +1,3 @@
-"""Демо-магазин: полигон для AI-тестировщика.
-
-Обычный маленький интернет-магазин на FastAPI и Jinja. Позже в него будут
-заложены баги, которые агент должен найти.
-"""
-
 from __future__ import annotations
 
 import math
@@ -21,19 +15,23 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
 def create_app() -> FastAPI:
+    """Создаёт приложение демо-магазина с каталогом в памяти."""
     store: Store = seed_store()
     app = FastAPI(title="Demo Shop", docs_url=None, redoc_url=None)
     app.state.store = store
 
     def render(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLResponse:
+        """Отрисовывает HTML-шаблон с переданными данными."""
         return templates.TemplateResponse(request, name, ctx, status_code=status_code)
 
     @app.get("/")
     def index() -> RedirectResponse:
+        """Перенаправляет с главной страницы в каталог."""
         return RedirectResponse("/products", status_code=303)
 
     @app.get("/products", response_class=HTMLResponse)
     def products(request: Request, page: int = 1) -> HTMLResponse:
+        """Показывает страницу каталога."""
         total_pages = max(1, math.ceil(len(store.products) / PER_PAGE))
         page = min(max(page, 1), total_pages)
         start = (page - 1) * PER_PAGE
@@ -42,6 +40,7 @@ def create_app() -> FastAPI:
 
     @app.get("/products/{product_id}", response_class=HTMLResponse)
     def product(request: Request, product_id: int) -> HTMLResponse:
+        """Показывает карточку товара."""
         item = store.product(product_id)
         if item is None:
             raise HTTPException(404, "Товар не найден")
@@ -49,6 +48,7 @@ def create_app() -> FastAPI:
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
+        """Сообщает, что магазин работает."""
         return {"status": "ok"}
 
     return app

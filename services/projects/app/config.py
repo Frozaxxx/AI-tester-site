@@ -1,10 +1,7 @@
-"""Настройки сервиса. Значения берутся из файла .env в корне проекта."""
-
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# .env лежит в корне проекта: services/<сервис>/app/config.py -> три уровня вверх
 ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 

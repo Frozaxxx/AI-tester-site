@@ -1,5 +1,3 @@
-"""Alembic: берёт адрес базы из app.config и таблицы из ORM-моделей."""
-
 import asyncio
 from logging.config import fileConfig
 
@@ -18,7 +16,7 @@ target_metadata = Base.metadata
 
 
 def run_offline() -> None:
-    """alembic upgrade head --sql: печатает SQL, не подключаясь к базе."""
+    """Печатает SQL миграций, не подключаясь к базе."""
     context.configure(
         url=settings.database_url, target_metadata=target_metadata, literal_binds=True
     )
@@ -27,12 +25,14 @@ def run_offline() -> None:
 
 
 def run_migrations(connection: Connection) -> None:
+    """Применяет миграции через переданное соединение."""
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_online() -> None:
+    """Подключается к базе и применяет миграции."""
     engine = create_async_engine(settings.database_url)
     async with engine.connect() as connection:
         await connection.run_sync(run_migrations)
