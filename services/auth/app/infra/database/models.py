@@ -1,5 +1,3 @@
-"""Таблицы сервиса auth."""
-
 import uuid
 from datetime import datetime
 
@@ -11,7 +9,7 @@ class Base(DeclarativeBase):
     pass
 
 
-class UserModel(Base):
+class UserOrm(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -20,9 +18,7 @@ class UserModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class RefreshTokenModel(Base):
-    """Храним только хэш токена: утечка базы не даёт войти от имени пользователя."""
-
+class RefreshTokenOrm(Base):
     __tablename__ = "refresh_tokens"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
