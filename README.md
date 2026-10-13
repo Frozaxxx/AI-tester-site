@@ -12,21 +12,32 @@ AI-агент, который тестирует сайты в браузере.
 demo_shop/          демо-магазин с заложенными багами, полигон для агента
 proto/              gRPC-контракты между сервисами
 services/
-  gateway/          REST для фронтенда, проверка JWT
+  gateway/          единственная точка входа: REST, куки, проверка JWT
   auth/             пользователи и токены
   projects/         сайты, сценарии, тестовые аккаунты
   runs/             прогоны, шаги, найденные баги, сгенерированные тесты
   runner/           браузер и LLM-агент
 ```
 
-Внутри сервиса слои DDD:
+Внутри сервиса слои DDD (на примере auth):
 
 ```
 app/
-  domain/           сущности и бизнес-правила, без SQLAlchemy и gRPC
-  application/      сценарии использования
-  infrastructure/   база данных, очереди, внешние клиенты
-  api/              gRPC-обработчики
+  domain/
+    entities.py       сущности (dataclass)
+    services.py       бизнес-правила
+    exceptions.py     ошибки со статусом ответа
+  application/
+    repos.py          интерфейсы репозиториев
+    dtos.py           схемы запросов и ответов
+    services/         сценарии: регистрация, вход, обновление токенов, выход
+  infra/
+    database/         models.py, mappers.py, repos/
+    redis.py
+  api/servicer.py     gRPC-обработчики
+  grpc_gen/           код из proto (генерируется)
+  security.py         пароли и токены
+  main.py
 tests/
 ```
 
@@ -45,7 +56,7 @@ RSA-ключ для подписи JWT: выполни `openssl genrsa 2048` и 
 ```
 cp .env.example .env
 docker compose up -d
-pip install "sqlalchemy[asyncio]" asyncpg alembic pydantic-settings argon2-cffi "pyjwt[crypto]" redis
+pip install "sqlalchemy[asyncio]" asyncpg alembic pydantic-settings argon2-cffi "pyjwt[crypto]" redis fastapi "uvicorn[standard]" grpcio grpcio-tools
 cd services/runs
 alembic upgrade head
 ```
@@ -54,4 +65,40 @@ alembic upgrade head
 
 ```
 alembic revision --autogenerate -m "что изменилось"
+```
+
+## Авторизация: gateway + auth
+
+```
+браузер --HTTP + куки--> gateway (:8000) --gRPC--> auth (:50051) --> Postgres, Redis
+```
+
+Gateway — единственная точка входа: ставит куки и проверяет JWT публичным ключом,
+не обращаясь к auth. Auth наружу не открыт и слушает только gRPC.
+
+Запуск (каждый сервис в своём терминале):
+
+```
+cd services/auth
+alembic upgrade head
+python -m app.main
+
+cd services/gateway
+uvicorn app.main:app --port 8000
+```
+
+Документация ручек: http://localhost:8000/docs
+
+| Ручка gateway | Что делает |
+|---|---|
+| `POST /api/v1/auth/register` | регистрация |
+| `POST /api/v1/auth/login` | вход, ставит куки `access_token` и `refresh_token` |
+| `POST /api/v1/auth/refresh` | новая пара токенов по refresh-куке |
+| `POST /api/v1/auth/logout` | выход: refresh отзывается в базе, access попадает в чёрный список Redis |
+| `GET /api/v1/auth/me` | текущий пользователь |
+
+Контракт между сервисами — `proto/auth.proto`. После его изменения перегенерируй код:
+
+```
+python proto/generate.py
 ```

@@ -24,6 +24,7 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["**/grpc_gen"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "RUF"]
