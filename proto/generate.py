@@ -8,7 +8,7 @@ PROTO_DIR = ROOT / "proto"
 SERVICES = {
     "auth": ["auth.proto"],
     "projects": ["projects.proto"],
-    "gateway": ["auth.proto"],
+    "gateway": ["auth.proto", "projects.proto"],
 }
 
 
