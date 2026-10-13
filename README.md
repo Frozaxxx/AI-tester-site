@@ -83,6 +83,10 @@ cd services/auth
 alembic upgrade head
 python -m app.main
 
+cd services/projects
+alembic upgrade head
+python -m app.main
+
 cd services/gateway
 uvicorn app.main:app --port 8000
 ```
@@ -97,7 +101,23 @@ uvicorn app.main:app --port 8000
 | `POST /api/v1/auth/logout` | выход: refresh отзывается в базе, access попадает в чёрный список Redis |
 | `GET /api/v1/auth/me` | текущий пользователь |
 
-Контракт между сервисами — `proto/auth.proto`. После его изменения перегенерируй код:
+## Проекты: gateway + projects
+
+Проект — сайт, который тестирует агент (название и адрес). Сценарий — задание агенту
+обычным текстом. Projects слушает gRPC на `:50052`, gateway передаёт ему id пользователя из токена.
+Чужие проекты и сценарии отдаются как 404.
+
+| Ручка gateway | Что делает |
+|---|---|
+| `POST /api/v1/projects` | создать проект |
+| `GET /api/v1/projects` | мои проекты |
+| `GET /api/v1/projects/{id}` | один проект |
+| `DELETE /api/v1/projects/{id}` | удалить проект вместе со сценариями |
+| `POST /api/v1/projects/{id}/scenarios` | добавить сценарий |
+| `GET /api/v1/projects/{id}/scenarios` | сценарии проекта |
+| `DELETE /api/v1/scenarios/{id}` | удалить сценарий |
+
+Контракты между сервисами лежат в `proto/`. После их изменения перегенерируй код:
 
 ```
 python proto/generate.py
