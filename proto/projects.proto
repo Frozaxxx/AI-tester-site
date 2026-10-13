@@ -1,0 +1,68 @@
+// Контракт сервиса projects. Его вызывает gateway.
+// owner_id — id пользователя из access-токена, который уже проверил gateway.
+// Ошибки возвращаются gRPC-статусом, а код ошибки лежит в метаданных под ключом error-code.
+syntax = "proto3";
+
+package projects.v1;
+
+service ProjectsService {
+  rpc CreateProject(CreateProjectRequest) returns (Project);
+  rpc ListProjects(ListProjectsRequest) returns (ProjectList);
+  rpc GetProject(ProjectRequest) returns (Project);
+  rpc DeleteProject(ProjectRequest) returns (Empty);
+  rpc CreateScenario(CreateScenarioRequest) returns (Scenario);
+  rpc ListScenarios(ProjectRequest) returns (ScenarioList);
+  rpc DeleteScenario(ScenarioRequest) returns (Empty);
+}
+
+message Empty {}
+
+message Project {
+  string id = 1;
+  string name = 2;
+  string base_url = 3;
+  int64 created_at = 4;  // unix-время в секундах
+}
+
+message Scenario {
+  string id = 1;
+  string project_id = 2;
+  string title = 3;
+  string text = 4;
+  int64 created_at = 5;  // unix-время в секундах
+}
+
+message ProjectList {
+  repeated Project projects = 1;
+}
+
+message ScenarioList {
+  repeated Scenario scenarios = 1;
+}
+
+message CreateProjectRequest {
+  string owner_id = 1;
+  string name = 2;
+  string base_url = 3;
+}
+
+message ListProjectsRequest {
+  string owner_id = 1;
+}
+
+message ProjectRequest {
+  string owner_id = 1;
+  string project_id = 2;
+}
+
+message CreateScenarioRequest {
+  string owner_id = 1;
+  string project_id = 2;
+  string title = 3;
+  string text = 4;
+}
+
+message ScenarioRequest {
+  string owner_id = 1;
+  string scenario_id = 2;
+}
