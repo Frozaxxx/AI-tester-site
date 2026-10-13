@@ -12,7 +12,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.exceptions import GatewayError
-from app.grpc_gen import auth_pb2
+from app.grpc_gen import auth_pb2, projects_pb2
 from app.main import app
 
 _key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -74,6 +74,57 @@ class FakeAuthClient:
         return self.user
 
 
+class FakeProjectsClient:
+    def __init__(self) -> None:
+        self.projects: dict[str, tuple[str, projects_pb2.Project]] = {}
+        self.scenarios: dict[str, tuple[str, projects_pb2.Scenario]] = {}
+
+    def _own_project(self, owner_id: str, project_id: str) -> projects_pb2.Project:
+        owner, project = self.projects.get(project_id, ("", None))
+        if owner != owner_id:
+            raise GatewayError(HTTPStatus.NOT_FOUND, "PROJECT_NOT_FOUND", "Проект не найден")
+        return project
+
+    async def create_project(self, owner_id: str, name: str, base_url: str) -> projects_pb2.Project:
+        if not base_url.startswith(("http://", "https://")):
+            raise GatewayError(HTTPStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "плохой адрес")
+        project = projects_pb2.Project(
+            id=str(uuid.uuid4()), name=name, base_url=base_url, created_at=int(time.time())
+        )
+        self.projects[project.id] = (owner_id, project)
+        return project
+
+    async def list_projects(self, owner_id: str) -> list[projects_pb2.Project]:
+        return [p for owner, p in self.projects.values() if owner == owner_id]
+
+    async def get_project(self, owner_id: str, project_id: str) -> projects_pb2.Project:
+        return self._own_project(owner_id, project_id)
+
+    async def delete_project(self, owner_id: str, project_id: str) -> None:
+        self._own_project(owner_id, project_id)
+        del self.projects[project_id]
+
+    async def create_scenario(
+        self, owner_id: str, project_id: str, title: str, text: str
+    ) -> projects_pb2.Scenario:
+        self._own_project(owner_id, project_id)
+        scenario = projects_pb2.Scenario(
+            id=str(uuid.uuid4()), project_id=project_id, title=title, text=text, created_at=0
+        )
+        self.scenarios[scenario.id] = (owner_id, scenario)
+        return scenario
+
+    async def list_scenarios(self, owner_id: str, project_id: str) -> list[projects_pb2.Scenario]:
+        self._own_project(owner_id, project_id)
+        return [s for _, s in self.scenarios.values() if s.project_id == project_id]
+
+    async def delete_scenario(self, owner_id: str, scenario_id: str) -> None:
+        owner, _ = self.scenarios.get(scenario_id, ("", None))
+        if owner != owner_id:
+            raise GatewayError(HTTPStatus.NOT_FOUND, "SCENARIO_NOT_FOUND", "Сценарий не найден")
+        del self.scenarios[scenario_id]
+
+
 @pytest.fixture
 def auth() -> FakeAuthClient:
     return FakeAuthClient()
@@ -85,8 +136,16 @@ def redis() -> FakeAsyncRedis:
 
 
 @pytest.fixture
-async def client(auth: FakeAuthClient, redis: FakeAsyncRedis) -> AsyncIterator[AsyncClient]:
+def projects() -> FakeProjectsClient:
+    return FakeProjectsClient()
+
+
+@pytest.fixture
+async def client(
+    auth: FakeAuthClient, projects: FakeProjectsClient, redis: FakeAsyncRedis
+) -> AsyncIterator[AsyncClient]:
     app.state.auth_client = auth
+    app.state.projects_client = projects
     app.state.redis = redis
     app.state.public_key = PUBLIC_KEY
     settings.cookie_secure = False

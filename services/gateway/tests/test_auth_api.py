@@ -2,7 +2,7 @@ import grpc
 import pytest
 from httpx import AsyncClient
 
-from app.clients.auth import _call
+from app.clients.base import grpc_call
 from app.exceptions import GatewayError
 from tests.conftest import make_access_token
 
@@ -86,6 +86,7 @@ def _rpc_error(code: grpc.StatusCode, error_code: str | None = None) -> grpc.aio
         (grpc.StatusCode.ALREADY_EXISTS, 409),
         (grpc.StatusCode.INVALID_ARGUMENT, 422),
         (grpc.StatusCode.RESOURCE_EXHAUSTED, 429),
+        (grpc.StatusCode.NOT_FOUND, 404),
         (grpc.StatusCode.UNAVAILABLE, 503),
     ],
 )
@@ -94,5 +95,5 @@ async def test_grpc_errors_map_to_http(code: grpc.StatusCode, status: int) -> No
         raise _rpc_error(code, "SOME_CODE")
 
     with pytest.raises(GatewayError) as info:
-        await _call(failing())
+        await grpc_call(failing())
     assert info.value.status_code == status
