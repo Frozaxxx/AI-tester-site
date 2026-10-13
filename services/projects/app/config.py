@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_prefix="PROJECTS_", extra="ignore")
 
     database_url: str
+    grpc_host: str
+    grpc_port: int
 
 
 settings = Settings()
