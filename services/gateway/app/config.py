@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_prefix="GATEWAY_", extra="ignore")
 
     auth_grpc_address: str
+    projects_grpc_address: str
     redis_url: str
     cookie_secure: bool
     jwt_algorithm: str = Field(validation_alias="JWT_ALGORITHM")

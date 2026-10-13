@@ -7,25 +7,31 @@ from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.projects import router as projects_router
 from app.clients.auth import AuthClient
+from app.clients.projects import ProjectsClient
 from app.config import settings
 from app.exceptions import GatewayError
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Подключается к auth и Redis при старте и закрывает соединения при остановке."""
-    channel = grpc.aio.insecure_channel(settings.auth_grpc_address)
-    app.state.auth_client = AuthClient(channel)
+    """Подключается к auth, projects и Redis при старте и закрывает соединения при остановке."""
+    auth_channel = grpc.aio.insecure_channel(settings.auth_grpc_address)
+    projects_channel = grpc.aio.insecure_channel(settings.projects_grpc_address)
+    app.state.auth_client = AuthClient(auth_channel)
+    app.state.projects_client = ProjectsClient(projects_channel)
     app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
     app.state.public_key = await app.state.auth_client.get_public_key()
     yield
-    await channel.close()
+    await auth_channel.close()
+    await projects_channel.close()
     await app.state.redis.aclose()
 
 
 app = FastAPI(title="AI-tester gateway", lifespan=lifespan)
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(projects_router, prefix="/api/v1")
 
 
 @app.exception_handler(GatewayError)
