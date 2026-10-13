@@ -1,0 +1,52 @@
+// Контракт сервиса auth. Его вызывает gateway.
+// Ошибки возвращаются gRPC-статусом, а код ошибки лежит в метаданных под ключом error-code.
+syntax = "proto3";
+
+package auth.v1;
+
+service AuthService {
+  rpc Register(Credentials) returns (User);
+  rpc Login(Credentials) returns (TokenPair);
+  rpc Refresh(RefreshRequest) returns (TokenPair);
+  rpc Logout(LogoutRequest) returns (Empty);
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc GetPublicKey(Empty) returns (PublicKey);
+}
+
+message Empty {}
+
+message Credentials {
+  string email = 1;
+  string password = 2;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  int64 created_at = 3;  // unix-время в секундах
+}
+
+message TokenPair {
+  User user = 1;
+  string access_token = 2;
+  int64 access_expires_at = 3;
+  string refresh_token = 4;
+  int64 refresh_expires_at = 5;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message LogoutRequest {
+  string refresh_token = 1;
+  string access_token = 2;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message PublicKey {
+  string pem = 1;
+}
