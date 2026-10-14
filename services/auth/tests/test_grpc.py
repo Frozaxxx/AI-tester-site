@@ -1,3 +1,5 @@
+import asyncio
+
 import grpc
 import pytest
 
@@ -56,6 +58,15 @@ async def test_login_blocked_after_failures(stub) -> None:
     for _ in range(settings.login_attempts_limit):
         await expect_error(stub.Login(wrong), grpc.StatusCode.UNAUTHENTICATED)
     await expect_error(stub.Login(CREDS), grpc.StatusCode.RESOURCE_EXHAUSTED)
+
+
+async def test_parallel_logins_respect_limit(stub) -> None:
+    await stub.Register(CREDS)
+    wrong = auth_pb2.Credentials(email=CREDS.email, password="wrong-pass")
+    results = await asyncio.gather(*(stub.Login(wrong) for _ in range(20)), return_exceptions=True)
+    codes = [result.code() for result in results]
+    assert codes.count(grpc.StatusCode.UNAUTHENTICATED) == settings.login_attempts_limit
+    assert codes.count(grpc.StatusCode.RESOURCE_EXHAUSTED) == 20 - settings.login_attempts_limit
 
 
 async def test_refresh_rotation_and_reuse(stub) -> None:

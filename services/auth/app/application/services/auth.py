@@ -68,13 +68,12 @@ class AuthService:
         if len(credentials.password) > PASSWORD_MAX_LENGTH:
             raise InvalidCredentialsError
 
-        await login_attempts.ensure_not_blocked(self._redis, email)
+        await login_attempts.register_attempt(self._redis, email)
 
         user = await self._user_repo.get_by_email(email)
         password_hash = user.password_hash if user else DUMMY_PASSWORD_HASH
         password_ok = await verify_password_async(credentials.password, password_hash)
         if user is None or not password_ok:
-            await login_attempts.register_failure(self._redis, email)
             raise InvalidCredentialsError
 
         await login_attempts.reset(self._redis, email)

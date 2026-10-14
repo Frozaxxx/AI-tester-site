@@ -5,25 +5,21 @@ from app.domain.exceptions import TooManyAttemptsError
 
 
 def _key(email: str) -> str:
-    """Возвращает ключ Redis со счётчиком неудачных входов для email."""
+    """Возвращает ключ Redis со счётчиком попыток входа для email."""
     return f"auth:login_attempts:{email}"
 
 
-async def ensure_not_blocked(redis: Redis, email: str) -> None:
-    """Запрещает вход, если для этого email исчерпан лимит попыток."""
-    attempts = await redis.get(_key(email))
-    if attempts is not None and int(attempts) >= settings.login_attempts_limit:
+async def register_attempt(redis: Redis, email: str) -> None:
+    """Засчитывает попытку входа заранее и запрещает вход, если лимит попыток исчерпан."""
+    key = _key(email)
+    async with redis.pipeline(transaction=True) as pipe:
+        pipe.set(key, 0, ex=settings.login_block_minutes * 60, nx=True)
+        pipe.incr(key)
+        _, attempts = await pipe.execute()
+    if attempts > settings.login_attempts_limit:
         raise TooManyAttemptsError
 
 
-async def register_failure(redis: Redis, email: str) -> None:
-    """Увеличивает счётчик неудачных входов и запускает таймер блокировки."""
-    key = _key(email)
-    attempts = await redis.incr(key)
-    if attempts == 1:
-        await redis.expire(key, settings.login_block_minutes * 60)
-
-
 async def reset(redis: Redis, email: str) -> None:
-    """Сбрасывает счётчик неудачных входов после успешного входа."""
+    """Сбрасывает счётчик попыток после успешного входа."""
     await redis.delete(_key(email))
