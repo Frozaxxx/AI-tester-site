@@ -57,8 +57,9 @@ def _scenario(scenario: Scenario) -> projects_pb2.Scenario:
 
 
 class ProjectsServicer(projects_pb2_grpc.ProjectsServiceServicer):
-    def __init__(self, session_factory: async_sessionmaker) -> None:
+    def __init__(self, session_factory: async_sessionmaker, allow_internal_urls: bool) -> None:
         self._session_factory = session_factory
+        self._allow_internal_urls = allow_internal_urls
 
     @asynccontextmanager
     async def _service(self) -> AsyncIterator[ProjectService]:
@@ -68,6 +69,7 @@ class ProjectsServicer(projects_pb2_grpc.ProjectsServiceServicer):
                 session=session,
                 project_repo=SqlProjectRepository(session),
                 scenario_repo=SqlScenarioRepository(session),
+                allow_internal_urls=self._allow_internal_urls,
             )
 
     @handle_errors

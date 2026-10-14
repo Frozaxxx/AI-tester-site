@@ -14,14 +14,18 @@ class ProjectService:
         session: AsyncSession,
         project_repo: ProjectRepository,
         scenario_repo: ScenarioRepository,
+        allow_internal_urls: bool = False,
     ) -> None:
         self._session = session
         self._project_repo = project_repo
         self._scenario_repo = scenario_repo
+        self._allow_internal_urls = allow_internal_urls
 
     async def create_project(self, owner_id: str, name: str, base_url: str) -> Project:
         """Создаёт проект для пользователя."""
-        project = create_project(_parse_owner_id(owner_id), name, base_url)
+        project = create_project(
+            _parse_owner_id(owner_id), name, base_url, self._allow_internal_urls
+        )
         await self._project_repo.add(project)
         await self._session.commit()
         return project

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     database_url: str
     grpc_host: str
     grpc_port: int
+    allow_internal_urls: bool
 
 
 settings = Settings()

@@ -15,7 +15,7 @@ async def serve() -> None:
     """Запускает gRPC-сервер проектов и держит его, пока процесс не остановят."""
     server = grpc.aio.server()
     projects_pb2_grpc.add_ProjectsServiceServicer_to_server(
-        ProjectsServicer(session_factory), server
+        ProjectsServicer(session_factory, settings.allow_internal_urls), server
     )
     address = f"{settings.grpc_host}:{settings.grpc_port}"
     server.add_insecure_port(address)
