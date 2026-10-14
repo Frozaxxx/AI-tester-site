@@ -42,7 +42,7 @@ async def stub(
     """Поднимает gRPC-сервер проектов в тесте и даёт клиент к нему."""
     server = grpc.aio.server()
     projects_pb2_grpc.add_ProjectsServiceServicer_to_server(
-        ProjectsServicer(session_factory), server
+        ProjectsServicer(session_factory, allow_internal_urls=False), server
     )
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
