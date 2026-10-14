@@ -25,6 +25,10 @@ async def test_auth_error_is_passed_through(client: AsyncClient) -> None:
 async def test_too_long_input_is_rejected_before_auth(client: AsyncClient) -> None:
     r = await client.post(f"{AUTH}/login", json={**CREDS, "password": "a" * 10_000})
     assert r.status_code == 422
+    assert r.json() == {
+        "error_code": "VALIDATION_ERROR",
+        "message": "Некорректные данные: password",
+    }
 
 
 async def test_login_sets_cookies(client: AsyncClient) -> None:

@@ -1,8 +1,10 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 
 import grpc
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
@@ -40,6 +42,19 @@ async def gateway_error_handler(request: Request, exc: GatewayError) -> JSONResp
     return JSONResponse(
         status_code=exc.status_code,
         content={"error_code": exc.error_code, "message": exc.message},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Отдаёт ошибку валидации в общем формате и не возвращает клиенту присланные данные."""
+    fields = sorted({str(error["loc"][-1]) for error in exc.errors()})
+    return JSONResponse(
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        content={
+            "error_code": "VALIDATION_ERROR",
+            "message": f"Некорректные данные: {', '.join(fields)}",
+        },
     )
 
 
