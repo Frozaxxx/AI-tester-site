@@ -19,9 +19,11 @@ class SqlRefreshTokenRepository:
         await self._session.flush()
 
     async def get_by_hash(self, token_hash: str) -> RefreshToken | None:
-        """Находит refresh-токен по его хэшу."""
+        """Находит refresh-токен по хэшу и блокирует строку до конца транзакции."""
         result = await self._session.execute(
-            select(RefreshTokenOrm).where(RefreshTokenOrm.token_hash == token_hash)
+            select(RefreshTokenOrm)
+            .where(RefreshTokenOrm.token_hash == token_hash)
+            .with_for_update()
         )
         model = result.scalar_one_or_none()
         return RefreshTokenMapper.from_model(model) if model else None

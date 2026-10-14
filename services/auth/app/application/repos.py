@@ -21,7 +21,7 @@ class RefreshTokenRepository(Protocol):
         """Сохраняет новый refresh-токен."""
 
     async def get_by_hash(self, token_hash: str) -> RefreshToken | None:
-        """Находит refresh-токен по его хэшу."""
+        """Находит refresh-токен по хэшу и блокирует его от параллельного обновления."""
 
     async def save(self, token: RefreshToken) -> None:
         """Сохраняет изменения refresh-токена."""
