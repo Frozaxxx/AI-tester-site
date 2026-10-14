@@ -17,7 +17,15 @@ def test_email_is_normalized() -> None:
 
 @pytest.mark.parametrize(
     "email",
-    ["", "andrey", "andrey@", "@example.com", "a b@example.com", "a" * 250 + "@example.com"],
+    [
+        "",
+        "andrey",
+        "andrey@",
+        "@example.com",
+        "a b@example.com",
+        "a\x00b@example.com",
+        "a" * 250 + "@example.com",
+    ],
 )
 def test_invalid_email(email: str) -> None:
     with pytest.raises(ValidationError):
