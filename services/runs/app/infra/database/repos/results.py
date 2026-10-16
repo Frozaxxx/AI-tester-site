@@ -1,9 +1,11 @@
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities import Finding, GeneratedTest, Step
+from app.domain.exceptions import ValidationError
 from app.infra.database.mappers import FindingMapper, GeneratedTestMapper, StepMapper
 from app.infra.database.models import FindingOrm, GeneratedTestOrm, StepOrm
 
@@ -13,9 +15,13 @@ class SqlStepRepository:
         self._session = session
 
     async def add(self, step: Step) -> None:
-        """Сохраняет шаг прогона."""
+        """Сохраняет шаг прогона, а повтор номера шага считает ошибкой."""
         self._session.add(StepMapper.to_model(step))
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError:
+            await self._session.rollback()
+            raise ValidationError(f"Шаг №{step.index} уже записан") from None
 
     async def list_by_run(self, run_id: uuid.UUID) -> list[Step]:
         """Возвращает шаги прогона по порядку."""
