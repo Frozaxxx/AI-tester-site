@@ -15,6 +15,7 @@ from app.domain.services import (
     create_step,
     ensure_owner,
     finish_run,
+    parse_finding_kind,
     start_run,
 )
 
@@ -108,3 +109,47 @@ def test_tokens_and_owner() -> None:
         ensure_owner(run, uuid.uuid4())
     with pytest.raises(RunNotFoundError):
         ensure_owner(None, run.owner_id)
+
+
+def test_runner_text_is_cleaned() -> None:
+    """Нулевые байты убираются, а слишком длинные тексты от браузера и LLM обрезаются."""
+    run = running_run()
+    step = create_step(run, 0, "click", ok=False, error="bad\x00byte" + "x" * 10_000)
+    assert "\x00" not in step.error and len(step.error) == 5_000
+    finding = create_finding(run, FindingKind.LLM_JUDGE, "Цена\nне совпадает" + "!" * 500)
+    assert finding.title.startswith("Цена не совпадает") and len(finding.title) == 300
+
+
+@pytest.mark.parametrize("index", [-1, 10_001, 2**31])
+def test_step_index_limits(index: int) -> None:
+    """Номер шага вне допустимого диапазона не принимается ни у шага, ни у бага."""
+    run = running_run()
+    with pytest.raises(ValidationError):
+        create_step(run, index, "click", ok=True)
+    with pytest.raises(ValidationError):
+        create_finding(run, FindingKind.JS_ERROR, "Баг", step_index=index)
+
+
+def test_token_limits() -> None:
+    """Слишком большое число токенов не ломает счётчик в базе."""
+    run = new_run()
+    with pytest.raises(ValidationError):
+        add_tokens(run, 3_000_000_000)
+    run.tokens_used = 1_999_999_999
+    with pytest.raises(ValidationError):
+        add_tokens(run, 10)
+
+
+def test_unknown_finding_kind() -> None:
+    """Строка с неизвестным типом бага превращается в ошибку валидации."""
+    assert parse_finding_kind("js_error") == FindingKind.JS_ERROR
+    with pytest.raises(ValidationError):
+        parse_finding_kind("nonsense")
+
+
+def test_generated_test_rejects_null_byte() -> None:
+    """Код теста с нулевым байтом не сохраняется."""
+    run = running_run()
+    finish_run(run, found_bugs=False, now=NOW)
+    with pytest.raises(ValidationError):
+        create_generated_test(run, "def test(page):\x00 ...")

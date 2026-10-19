@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime
 
@@ -18,6 +19,34 @@ STEP_ACTIONS = frozenset(
     {"goto", "click", "fill", "press", "select", "check", "expect_text", "expect_url", "wait"}
 )
 FINDING_TITLE_MAX_LENGTH = 300
+STEP_INDEX_MAX = 10_000
+STEP_TEXT_MAX_LENGTH = 5_000
+FINDING_DETAILS_MAX_LENGTH = 20_000
+TEST_CODE_MAX_LENGTH = 200_000
+TOKENS_PER_CALL_MAX = 10_000_000
+TOKENS_TOTAL_MAX = 2_000_000_000
+CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]+")
+
+
+def _clean(text: str | None, max_length: int) -> str | None:
+    """Убирает нулевые байты, которые не принимает Postgres, и обрезает слишком длинный текст."""
+    if text is None:
+        return None
+    return text.replace("\x00", "")[:max_length]
+
+
+def _check_step_index(index: int) -> None:
+    """Проверяет, что номер шага неотрицательный и влезает в разумный предел."""
+    if not 0 <= index <= STEP_INDEX_MAX:
+        raise ValidationError(f"Номер шага должен быть от 0 до {STEP_INDEX_MAX}")
+
+
+def parse_finding_kind(raw: str) -> FindingKind:
+    """Превращает строку в тип бага, а неизвестный тип считает ошибкой."""
+    try:
+        return FindingKind(raw)
+    except ValueError:
+        raise ValidationError(f"Неизвестный тип бага «{raw}»") from None
 
 
 def create_run(owner_id: uuid.UUID, project_id: uuid.UUID, scenario_id: uuid.UUID | None) -> Run:
@@ -75,8 +104,10 @@ def cancel_run(run: Run, now: datetime) -> None:
 
 def add_tokens(run: Run, count: int) -> None:
     """Прибавляет потраченные на прогон токены LLM."""
-    if count < 0:
-        raise ValidationError("Число токенов не может быть отрицательным")
+    if not 0 <= count <= TOKENS_PER_CALL_MAX:
+        raise ValidationError(f"Число токенов за раз должно быть от 0 до {TOKENS_PER_CALL_MAX}")
+    if run.tokens_used + count > TOKENS_TOTAL_MAX:
+        raise ValidationError("Прогон превысил допустимый расход токенов")
     run.tokens_used += count
 
 
@@ -91,8 +122,7 @@ def create_step(
 ) -> Step:
     """Записывает очередное действие агента в идущий прогон."""
     ensure_running(run)
-    if index < 0:
-        raise ValidationError("Номер шага не может быть отрицательным")
+    _check_step_index(index)
     if action not in STEP_ACTIONS:
         raise ValidationError(f"Неизвестное действие «{action}»")
     return Step(
@@ -100,25 +130,29 @@ def create_step(
         index=index,
         action=action,
         ok=ok,
-        locator=locator,
-        value=value,
-        error=error,
+        locator=_clean(locator, STEP_TEXT_MAX_LENGTH),
+        value=_clean(value, STEP_TEXT_MAX_LENGTH),
+        error=_clean(error, STEP_TEXT_MAX_LENGTH),
     )
 
 
 def create_finding(
     run: Run, kind: FindingKind, title: str, details: str = "", step_index: int | None = None
 ) -> Finding:
-    """Записывает найденный баг в идущий прогон."""
+    """Записывает найденный баг в идущий прогон, а слишком длинный текст от LLM обрезает."""
     ensure_running(run)
-    title = title.strip()
+    title = CONTROL_CHARS_RE.sub(" ", title).strip()[:FINDING_TITLE_MAX_LENGTH]
     if not title:
         raise ValidationError("У бага должен быть заголовок")
-    if len(title) > FINDING_TITLE_MAX_LENGTH:
-        raise ValidationError(
-            f"Заголовок бага должен быть не длиннее {FINDING_TITLE_MAX_LENGTH} символов"
-        )
-    return Finding(run_id=run.id, kind=kind, title=title, details=details, step_index=step_index)
+    if step_index is not None:
+        _check_step_index(step_index)
+    return Finding(
+        run_id=run.id,
+        kind=kind,
+        title=title,
+        details=_clean(details, FINDING_DETAILS_MAX_LENGTH),
+        step_index=step_index,
+    )
 
 
 def create_generated_test(run: Run, code: str) -> GeneratedTest:
@@ -127,4 +161,6 @@ def create_generated_test(run: Run, code: str) -> GeneratedTest:
         raise InvalidRunStateError("Тест собирается только из успешно завершённого прогона")
     if not code.strip():
         raise ValidationError("Код теста не может быть пустым")
+    if len(code) > TEST_CODE_MAX_LENGTH or "\x00" in code:
+        raise ValidationError("Код теста слишком длинный или содержит нулевой байт")
     return GeneratedTest(run_id=run.id, code=code)
