@@ -9,7 +9,7 @@ from app.application.repos import (
     RunRepository,
     StepRepository,
 )
-from app.domain.entities import Finding, FindingKind, GeneratedTest, Run, Step, now
+from app.domain.entities import Finding, GeneratedTest, Run, Step, now
 from app.domain.exceptions import RunNotFoundError, ValidationError
 from app.domain.services import (
     add_tokens,
@@ -21,6 +21,7 @@ from app.domain.services import (
     create_step,
     ensure_owner,
     finish_run,
+    parse_finding_kind,
     start_run,
 )
 
@@ -101,14 +102,15 @@ class RunService:
     async def add_finding(
         self,
         run_id: str,
-        kind: FindingKind,
+        kind: str,
         title: str,
         details: str = "",
         step_index: int | None = None,
     ) -> Finding:
         """Записывает найденный баг в идущий прогон."""
+        finding_kind = parse_finding_kind(kind)
         run = await self._locked_run(run_id)
-        finding = create_finding(run, kind, title, details, step_index)
+        finding = create_finding(run, finding_kind, title, details, step_index)
         await self._finding_repo.add(finding)
         await self._session.commit()
         return finding
@@ -119,9 +121,10 @@ class RunService:
         add_tokens(run, count)
         return await self._save(run)
 
-    async def finish_run(self, run_id: str, found_bugs: bool) -> Run:
-        """Завершает прогон: с багами он упал, без багов прошёл."""
+    async def finish_run(self, run_id: str) -> Run:
+        """Завершает прогон: если в нём записаны баги, он упал, иначе прошёл."""
         run = await self._locked_run(run_id)
+        found_bugs = bool(await self._finding_repo.list_by_run(run.id))
         finish_run(run, found_bugs, now())
         return await self._save(run)
 

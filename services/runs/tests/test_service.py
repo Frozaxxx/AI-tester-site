@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services import RunService
-from app.domain.entities import FindingKind, RunStatus
+from app.domain.entities import RunStatus
 from app.domain.exceptions import InvalidRunStateError, RunNotFoundError, ValidationError
 from app.infra.database.repos import (
     SqlFindingRepository,
@@ -39,11 +39,9 @@ async def test_full_run_flow(service: RunService) -> None:
     await service.start_run(run_id)
     await service.add_step(run_id, 0, "goto", ok=True, value="https://shop.example.com")
     await service.add_step(run_id, 1, "click", ok=False, error="кнопка не нажимается")
-    await service.add_finding(
-        run_id, FindingKind.ASSERTION, "Кнопка «В корзину» не работает", step_index=1
-    )
+    await service.add_finding(run_id, "assertion", "Кнопка «В корзину» не работает", step_index=1)
     await service.add_tokens(run_id, 1500)
-    finished = await service.finish_run(run_id, found_bugs=True)
+    finished = await service.finish_run(run_id)
     assert finished.status == RunStatus.FAILED
     await service.save_generated_test(run_id, "def test_cart(page): ...")
     await service.save_generated_test(run_id, "def test_cart(page): pass")
@@ -75,7 +73,7 @@ async def test_cancelled_run_stops_runner(service: RunService) -> None:
     with pytest.raises(InvalidRunStateError):
         await service.add_step(run_id, 0, "click", ok=True)
     with pytest.raises(InvalidRunStateError):
-        await service.finish_run(run_id, found_bugs=False)
+        await service.finish_run(run_id)
     with pytest.raises(InvalidRunStateError):
         await service.cancel_run(OWNER, run_id)
 
@@ -104,3 +102,23 @@ async def test_bad_project_id_is_rejected(service: RunService) -> None:
     """Кривой id проекта при создании прогона даёт ошибку валидации."""
     with pytest.raises(ValidationError):
         await service.create_run(OWNER, "not-a-uuid")
+
+
+async def test_finish_status_depends_on_recorded_findings(service: RunService) -> None:
+    """Итог прогона определяется записанными багами, а не словами раннера."""
+    clean_id = str((await service.create_run(OWNER, PROJECT)).id)
+    await service.start_run(clean_id)
+    assert (await service.finish_run(clean_id)).status == RunStatus.PASSED
+
+    buggy_id = str((await service.create_run(OWNER, PROJECT)).id)
+    await service.start_run(buggy_id)
+    await service.add_finding(buggy_id, "js_error", "Ошибка в консоли")
+    assert (await service.finish_run(buggy_id)).status == RunStatus.FAILED
+
+
+async def test_unknown_finding_kind_is_rejected(service: RunService) -> None:
+    """Неизвестный тип бага даёт ошибку валидации, а не падение базы."""
+    run_id = str((await service.create_run(OWNER, PROJECT)).id)
+    await service.start_run(run_id)
+    with pytest.raises(ValidationError):
+        await service.add_finding(run_id, "nonsense", "Баг")
