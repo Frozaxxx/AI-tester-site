@@ -1,0 +1,120 @@
+// Контракт сервиса runs.
+// Пользовательские методы вызывает gateway: owner_id берётся из access-токена,
+// а принадлежность проекта пользователю gateway проверяет через projects.
+// Методы раннера вызывает только раннер, наружу через gateway они не открываются.
+// Ошибки возвращаются gRPC-статусом, а код ошибки лежит в метаданных под ключом error-code.
+syntax = "proto3";
+
+package runs.v1;
+
+service RunsService {
+  rpc CreateRun(CreateRunRequest) returns (Run);
+  rpc ListRuns(ListRunsRequest) returns (RunList);
+  rpc GetRun(RunRequest) returns (RunDetails);
+  rpc CancelRun(RunRequest) returns (Run);
+
+  rpc StartRun(RunnerRequest) returns (Run);
+  rpc AddStep(AddStepRequest) returns (Step);
+  rpc AddFinding(AddFindingRequest) returns (Finding);
+  rpc AddTokens(AddTokensRequest) returns (Run);
+  rpc FinishRun(RunnerRequest) returns (Run);
+  rpc CrashRun(RunnerRequest) returns (Run);
+  rpc SaveGeneratedTest(SaveGeneratedTestRequest) returns (GeneratedTest);
+}
+
+// Время везде — unix-время в секундах.
+message Run {
+  string id = 1;
+  string project_id = 2;
+  optional string scenario_id = 3;
+  string status = 4;
+  int64 tokens_used = 5;
+  int64 created_at = 6;
+  optional int64 started_at = 7;
+  optional int64 finished_at = 8;
+}
+
+message Step {
+  int32 index = 1;
+  string action = 2;
+  bool ok = 3;
+  optional string locator = 4;
+  optional string value = 5;
+  optional string error = 6;
+  int64 created_at = 7;
+}
+
+message Finding {
+  string id = 1;
+  string kind = 2;
+  string title = 3;
+  string details = 4;
+  optional int32 step_index = 5;
+  bool reproduced = 6;
+  int64 created_at = 7;
+}
+
+message GeneratedTest {
+  string code = 1;
+  bool verified = 2;
+  int64 created_at = 3;
+}
+
+message RunList {
+  repeated Run runs = 1;
+}
+
+message RunDetails {
+  Run run = 1;
+  repeated Step steps = 2;
+  repeated Finding findings = 3;
+  optional GeneratedTest test = 4;
+}
+
+message CreateRunRequest {
+  string owner_id = 1;
+  string project_id = 2;
+  optional string scenario_id = 3;
+}
+
+message ListRunsRequest {
+  string owner_id = 1;
+  string project_id = 2;
+}
+
+message RunRequest {
+  string owner_id = 1;
+  string run_id = 2;
+}
+
+message RunnerRequest {
+  string run_id = 1;
+}
+
+message AddStepRequest {
+  string run_id = 1;
+  int32 index = 2;
+  string action = 3;
+  bool ok = 4;
+  optional string locator = 5;
+  optional string value = 6;
+  optional string error = 7;
+}
+
+message AddFindingRequest {
+  string run_id = 1;
+  string kind = 2;
+  string title = 3;
+  string details = 4;
+  optional int32 step_index = 5;
+}
+
+message AddTokensRequest {
+  string run_id = 1;
+  int64 count = 2;
+}
+
+message SaveGeneratedTestRequest {
+  string run_id = 1;
+  string code = 2;
+}
