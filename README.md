@@ -87,6 +87,10 @@ cd services/projects
 alembic upgrade head
 python -m app.main
 
+cd services/runs
+alembic upgrade head
+python -m app.main
+
 cd services/gateway
 uvicorn app.main:app --port 8000
 ```
