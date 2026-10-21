@@ -5,7 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.services import RunService
 from app.domain.entities import RunStatus
-from app.domain.exceptions import InvalidRunStateError, RunNotFoundError, ValidationError
+from app.domain.exceptions import (
+    InvalidRunStateError,
+    RunNotFoundError,
+    TooManyActiveRunsError,
+    ValidationError,
+)
 from app.infra.database.repos import (
     SqlFindingRepository,
     SqlGeneratedTestRepository,
@@ -122,3 +127,14 @@ async def test_unknown_finding_kind_is_rejected(service: RunService) -> None:
     await service.start_run(run_id)
     with pytest.raises(ValidationError):
         await service.add_finding(run_id, "nonsense", "Баг")
+
+
+async def test_active_runs_limit(service: RunService) -> None:
+    """Больше трёх незавершённых прогонов разом запустить нельзя, а отмена освобождает место."""
+    runs = [await service.create_run(OWNER, PROJECT) for _ in range(3)]
+    with pytest.raises(TooManyActiveRunsError):
+        await service.create_run(OWNER, PROJECT)
+    assert await service.create_run(STRANGER, PROJECT)
+
+    await service.cancel_run(OWNER, str(runs[0].id))
+    assert await service.create_run(OWNER, PROJECT)

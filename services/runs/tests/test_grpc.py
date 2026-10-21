@@ -83,3 +83,13 @@ async def test_errors_map_to_grpc_codes(stub) -> None:
 
     cancelled = await stub.CancelRun(pb.RunRequest(owner_id=OWNER, run_id=run.id))
     assert cancelled.status == "cancelled"
+
+
+async def test_active_runs_limit_is_resource_exhausted(stub) -> None:
+    """Превышение лимита одновременных прогонов возвращает RESOURCE_EXHAUSTED."""
+    owner = str(uuid.uuid4())
+    for _ in range(3):
+        await stub.CreateRun(pb.CreateRunRequest(owner_id=owner, project_id=PROJECT))
+    request = pb.CreateRunRequest(owner_id=owner, project_id=PROJECT)
+    code = await expect_error(stub.CreateRun(request), grpc.StatusCode.RESOURCE_EXHAUSTED)
+    assert code == "TOO_MANY_ACTIVE_RUNS"
