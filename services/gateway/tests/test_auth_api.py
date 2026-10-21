@@ -91,6 +91,7 @@ def _rpc_error(code: grpc.StatusCode, error_code: str | None = None) -> grpc.aio
         (grpc.StatusCode.INVALID_ARGUMENT, 422),
         (grpc.StatusCode.RESOURCE_EXHAUSTED, 429),
         (grpc.StatusCode.NOT_FOUND, 404),
+        (grpc.StatusCode.FAILED_PRECONDITION, 409),
         (grpc.StatusCode.UNAVAILABLE, 503),
     ],
 )

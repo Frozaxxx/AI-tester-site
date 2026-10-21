@@ -12,7 +12,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.exceptions import GatewayError
-from app.grpc_gen import auth_pb2, projects_pb2
+from app.grpc_gen import auth_pb2, projects_pb2, runs_pb2
 from app.main import app
 
 _key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -125,6 +125,49 @@ class FakeProjectsClient:
         del self.scenarios[scenario_id]
 
 
+class FakeRunsClient:
+    def __init__(self) -> None:
+        self.runs: dict[str, tuple[str, runs_pb2.Run]] = {}
+
+    def _own_run(self, owner_id: str, run_id: str) -> runs_pb2.Run:
+        owner, run = self.runs.get(run_id, ("", None))
+        if owner != owner_id:
+            raise GatewayError(HTTPStatus.NOT_FOUND, "RUN_NOT_FOUND", "Прогон не найден")
+        return run
+
+    async def create_run(
+        self, owner_id: str, project_id: str, scenario_id: str | None
+    ) -> runs_pb2.Run:
+        run = runs_pb2.Run(
+            id=str(uuid.uuid4()),
+            project_id=project_id,
+            scenario_id=scenario_id,
+            status="queued",
+            created_at=int(time.time()),
+        )
+        self.runs[run.id] = (owner_id, run)
+        return run
+
+    async def list_runs(self, owner_id: str, project_id: str) -> list[runs_pb2.Run]:
+        return [
+            r for owner, r in self.runs.values() if owner == owner_id and r.project_id == project_id
+        ]
+
+    async def get_run(self, owner_id: str, run_id: str) -> runs_pb2.RunDetails:
+        run = self._own_run(owner_id, run_id)
+        step = runs_pb2.Step(index=0, action="click", ok=False, error="нет кнопки")
+        finding = runs_pb2.Finding(id="f1", kind="assertion", title="Баг", step_index=0)
+        return runs_pb2.RunDetails(run=run, steps=[step], findings=[finding])
+
+    async def cancel_run(self, owner_id: str, run_id: str) -> runs_pb2.Run:
+        run = self._own_run(owner_id, run_id)
+        if run.status == "cancelled":
+            raise GatewayError(HTTPStatus.CONFLICT, "INVALID_RUN_STATE", "Прогон уже завершён")
+        run.status = "cancelled"
+        run.finished_at = int(time.time())
+        return run
+
+
 @pytest.fixture
 def auth() -> FakeAuthClient:
     return FakeAuthClient()
@@ -141,11 +184,20 @@ def projects() -> FakeProjectsClient:
 
 
 @pytest.fixture
+def runs() -> FakeRunsClient:
+    return FakeRunsClient()
+
+
+@pytest.fixture
 async def client(
-    auth: FakeAuthClient, projects: FakeProjectsClient, redis: FakeAsyncRedis
+    auth: FakeAuthClient,
+    projects: FakeProjectsClient,
+    runs: FakeRunsClient,
+    redis: FakeAsyncRedis,
 ) -> AsyncIterator[AsyncClient]:
     app.state.auth_client = auth
     app.state.projects_client = projects
+    app.state.runs_client = runs
     app.state.redis = redis
     app.state.public_key = PUBLIC_KEY
     settings.cookie_secure = False
