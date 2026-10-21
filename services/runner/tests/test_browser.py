@@ -1,5 +1,8 @@
+import pytest
+
 from app.domain.entities import Action, ProblemKind
-from app.infra.browser import SiteBrowser
+from app.infra import browser as browser_module
+from app.infra.browser import PROBLEMS_MAX, SiteBrowser
 
 
 async def test_actions_on_page(site_url: str) -> None:
@@ -65,3 +68,32 @@ async def test_internal_addresses_are_blocked(site_url: str) -> None:
     async with SiteBrowser(site_url, allow_internal=True) as browser:
         away = await browser.perform(Action(name="goto", value="https://example.com"))
         assert not away.ok and "тестируемого сайта" in away.error
+
+
+async def test_redirect_to_internal_address_is_stopped(
+    site_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Если сайт редиректит во внутреннюю сеть, вкладка возвращается на прошлую страницу."""
+    monkeypatch.setattr(browser_module, "resolve_internal", lambda host: host == "localhost")
+    async with SiteBrowser(site_url) as browser:
+        assert (await browser.perform(Action(name="goto", value="/"))).ok
+        result = await browser.perform(Action(name="goto", value="/redirect-internal"))
+        assert not result.ok and "запрещённый адрес" in result.error
+        assert browser.url == site_url + "/"
+
+
+async def test_click_does_not_leave_site(site_url: str) -> None:
+    """Клик по ссылке на чужой сайт не уводит вкладку с тестируемого сайта."""
+    async with SiteBrowser(site_url, allow_internal=True) as browser:
+        await browser.perform(Action(name="goto", value="/external-link"))
+        result = await browser.perform(Action(name="click", locator="text=Партнёры"))
+        assert not result.ok and "example.com" in result.error
+        assert browser.url == site_url + "/external-link"
+
+
+async def test_problems_are_capped(site_url: str) -> None:
+    """Страница, которая сыплет ошибками, не раздувает список проблем бесконечно."""
+    async with SiteBrowser(site_url, allow_internal=True) as browser:
+        await browser.perform(Action(name="goto", value="/spam"))
+        await browser.perform(Action(name="wait", value="300"))
+        assert len(browser.take_problems()) == PROBLEMS_MAX

@@ -21,14 +21,23 @@ PAGES = {
 <script>console.error("Не удалось загрузить корзину")</script>""",
     "/api-error": """<!doctype html><meta charset="utf-8"><h1>API</h1>
 <script>fetch("/api/cart")</script>""",
+    "/external-link": """<!doctype html><meta charset="utf-8">
+<a href="https://example.com/">Партнёры</a>""",
+    "/spam": """<!doctype html><meta charset="utf-8"><h1>Спам</h1>
+<script>for (let i = 0; i < 200; i++) console.error("ошибка " + i)</script>""",
+    "/secret": "SECRET",
 }
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        """Отдаёт тестовую страницу, 500 для сломанного API и 404 для остального."""
+        """Отдаёт тестовые страницы, ошибку API, редирект во внутреннюю сеть и 404."""
         if self.path == "/api/cart":
             self._send(500, "Internal Server Error")
+        elif self.path == "/redirect-internal":
+            self.send_response(302)
+            self.send_header("Location", f"http://localhost:{self.server.server_address[1]}/secret")
+            self.end_headers()
         elif self.path in PAGES:
             self._send(200, PAGES[self.path])
         else:
