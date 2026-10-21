@@ -51,3 +51,15 @@ def same_site_url(base_url: str, target: str) -> str:
     ):
         raise ActionError("Переходить можно только по страницам тестируемого сайта")
     return url
+
+
+def _site_host(host: str) -> str:
+    """Убирает www из хоста, чтобы www.shop.ru и shop.ru считались одним сайтом."""
+    return host.lower().removeprefix("www.")
+
+
+def is_same_site(base_url: str, url: str) -> bool:
+    """Проверяет, что адрес относится к тестируемому сайту или его поддомену."""
+    base = _site_host(urlsplit(base_url).hostname or "")
+    host = _site_host(urlsplit(url).hostname or "")
+    return bool(host) and (host == base or host.endswith("." + base))

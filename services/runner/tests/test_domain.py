@@ -2,7 +2,7 @@ import pytest
 
 from app.domain.entities import Action
 from app.domain.exceptions import ActionError
-from app.domain.services import is_internal_ip, same_site_url, validate_action
+from app.domain.services import is_internal_ip, is_same_site, same_site_url, validate_action
 
 
 @pytest.mark.parametrize(
@@ -57,3 +57,19 @@ def test_same_site_url() -> None:
 def test_internal_ips(ip: str, internal: bool) -> None:
     """Локальные и служебные адреса считаются внутренними."""
     assert is_internal_ip(ip) is internal
+
+
+@pytest.mark.parametrize(
+    ("url", "same"),
+    [
+        ("https://shop.example.com/cart", True),
+        ("https://www.shop.example.com/", True),
+        ("https://api.shop.example.com/", True),
+        ("https://example.com/", False),
+        ("https://evilshop.example.com/", False),
+        ("https://shop.example.com.evil.com/", False),
+    ],
+)
+def test_same_site(url: str, same: bool) -> None:
+    """Свой сайт, его www и поддомены считаются одним сайтом, а похожие чужие нет."""
+    assert is_same_site("https://shop.example.com", url) is same
