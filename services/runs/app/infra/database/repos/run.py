@@ -1,9 +1,9 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.entities import Run
+from app.domain.entities import Run, RunStatus
 from app.infra.database.mappers import RunMapper
 from app.infra.database.models import RunOrm
 
@@ -38,3 +38,18 @@ class SqlRunRepository:
             .order_by(RunOrm.created_at.desc())
         )
         return [RunMapper.from_model(model) for model in result]
+
+    async def count_active(self, owner_id: uuid.UUID) -> int:
+        """Считает незавершённые прогоны пользователя, заранее блокируя его прогоны от гонки."""
+        if self._session.bind.dialect.name == "postgresql":
+            key = owner_id.int & 0x7FFF_FFFF_FFFF_FFFF
+            await self._session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+        result = await self._session.scalar(
+            select(func.count())
+            .select_from(RunOrm)
+            .where(
+                RunOrm.owner_id == owner_id,
+                RunOrm.status.in_([RunStatus.QUEUED, RunStatus.RUNNING]),
+            )
+        )
+        return result or 0

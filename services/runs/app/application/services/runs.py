@@ -44,11 +44,13 @@ class RunService:
     async def create_run(
         self, owner_id: str, project_id: str, scenario_id: str | None = None
     ) -> Run:
-        """Ставит в очередь прогон проекта, владельца которого уже проверил gateway."""
+        """Ставит в очередь прогон проекта, если не превышен лимит одновременных прогонов."""
+        owner = _parse_id(owner_id, ValidationError)
         run = create_run(
-            _parse_id(owner_id, ValidationError),
+            owner,
             _parse_id(project_id, ValidationError),
             _parse_id(scenario_id, ValidationError) if scenario_id else None,
+            active_runs=await self._run_repo.count_active(owner),
         )
         await self._run_repo.add(run)
         await self._session.commit()

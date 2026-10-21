@@ -17,6 +17,9 @@ class RunRepository(Protocol):
     async def list_by_project(self, owner_id: uuid.UUID, project_id: uuid.UUID) -> list[Run]:
         """Возвращает прогоны проекта пользователя, сначала новые."""
 
+    async def count_active(self, owner_id: uuid.UUID) -> int:
+        """Считает незавершённые прогоны пользователя, заранее блокируя его прогоны от гонки."""
+
 
 class StepRepository(Protocol):
     async def add(self, step: Step) -> None:

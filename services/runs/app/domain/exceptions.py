@@ -27,3 +27,9 @@ class InvalidRunStateError(DomainError):
     status_code = HTTPStatus.CONFLICT
     error_code = "INVALID_RUN_STATE"
     public_message = "Действие недоступно в текущем статусе прогона"
+
+
+class TooManyActiveRunsError(DomainError):
+    status_code = HTTPStatus.TOO_MANY_REQUESTS
+    error_code = "TOO_MANY_ACTIVE_RUNS"
+    public_message = "Слишком много прогонов в работе, дождитесь завершения или отмените один"

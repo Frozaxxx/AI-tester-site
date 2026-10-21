@@ -10,7 +10,12 @@ from app.domain.entities import (
     RunStatus,
     Step,
 )
-from app.domain.exceptions import InvalidRunStateError, RunNotFoundError, ValidationError
+from app.domain.exceptions import (
+    InvalidRunStateError,
+    RunNotFoundError,
+    TooManyActiveRunsError,
+    ValidationError,
+)
 
 FINAL_STATUSES = frozenset(
     {RunStatus.PASSED, RunStatus.FAILED, RunStatus.ERROR, RunStatus.CANCELLED}
@@ -19,6 +24,7 @@ STEP_ACTIONS = frozenset(
     {"goto", "click", "fill", "press", "select", "check", "expect_text", "expect_url", "wait"}
 )
 FINDING_TITLE_MAX_LENGTH = 300
+MAX_ACTIVE_RUNS_PER_USER = 3
 STEP_INDEX_MAX = 10_000
 STEP_TEXT_MAX_LENGTH = 5_000
 FINDING_DETAILS_MAX_LENGTH = 20_000
@@ -49,8 +55,15 @@ def parse_finding_kind(raw: str) -> FindingKind:
         raise ValidationError(f"Неизвестный тип бага «{raw}»") from None
 
 
-def create_run(owner_id: uuid.UUID, project_id: uuid.UUID, scenario_id: uuid.UUID | None) -> Run:
-    """Создаёт прогон в очереди."""
+def create_run(
+    owner_id: uuid.UUID,
+    project_id: uuid.UUID,
+    scenario_id: uuid.UUID | None,
+    active_runs: int = 0,
+) -> Run:
+    """Создаёт прогон в очереди, если у пользователя не исчерпан лимит одновременных прогонов."""
+    if active_runs >= MAX_ACTIVE_RUNS_PER_USER:
+        raise TooManyActiveRunsError
     return Run(owner_id=owner_id, project_id=project_id, scenario_id=scenario_id)
 
 
