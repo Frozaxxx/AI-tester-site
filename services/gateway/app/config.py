@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     auth_grpc_address: str
     projects_grpc_address: str
+    runs_grpc_address: str
     redis_url: str
     cookie_secure: bool
     jwt_algorithm: str = Field(validation_alias="JWT_ALGORITHM")
