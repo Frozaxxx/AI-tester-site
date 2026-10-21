@@ -1,8 +1,9 @@
+import uuid
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-from app.grpc_gen import auth_pb2, projects_pb2
+from app.grpc_gen import auth_pb2, projects_pb2, runs_pb2
 
 
 class Credentials(BaseModel):
@@ -73,4 +74,110 @@ class ScenarioResponse(BaseModel):
             title=scenario.title,
             text=scenario.text,
             created_at=_datetime(scenario.created_at),
+        )
+
+
+def _optional_datetime(message, field: str) -> datetime | None:
+    """Возвращает дату из optional-поля proto или None, если поле не заполнено."""
+    return _datetime(getattr(message, field)) if message.HasField(field) else None
+
+
+def _optional(message, field: str):
+    """Возвращает значение optional-поля proto или None, если поле не заполнено."""
+    return getattr(message, field) if message.HasField(field) else None
+
+
+class RunCreate(BaseModel):
+    scenario_id: uuid.UUID | None = None
+
+
+class RunResponse(BaseModel):
+    id: str
+    project_id: str
+    scenario_id: str | None
+    status: str
+    tokens_used: int
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+
+    @classmethod
+    def from_proto(cls, run: runs_pb2.Run) -> "RunResponse":
+        """Собирает ответ из proto-сообщения прогона."""
+        return cls(
+            id=run.id,
+            project_id=run.project_id,
+            scenario_id=_optional(run, "scenario_id"),
+            status=run.status,
+            tokens_used=run.tokens_used,
+            created_at=_datetime(run.created_at),
+            started_at=_optional_datetime(run, "started_at"),
+            finished_at=_optional_datetime(run, "finished_at"),
+        )
+
+
+class StepResponse(BaseModel):
+    index: int
+    action: str
+    ok: bool
+    locator: str | None
+    value: str | None
+    error: str | None
+
+    @classmethod
+    def from_proto(cls, step: runs_pb2.Step) -> "StepResponse":
+        """Собирает ответ из proto-сообщения шага."""
+        return cls(
+            index=step.index,
+            action=step.action,
+            ok=step.ok,
+            locator=_optional(step, "locator"),
+            value=_optional(step, "value"),
+            error=_optional(step, "error"),
+        )
+
+
+class FindingResponse(BaseModel):
+    id: str
+    kind: str
+    title: str
+    details: str
+    step_index: int | None
+    reproduced: bool
+
+    @classmethod
+    def from_proto(cls, finding: runs_pb2.Finding) -> "FindingResponse":
+        """Собирает ответ из proto-сообщения бага."""
+        return cls(
+            id=finding.id,
+            kind=finding.kind,
+            title=finding.title,
+            details=finding.details,
+            step_index=_optional(finding, "step_index"),
+            reproduced=finding.reproduced,
+        )
+
+
+class GeneratedTestResponse(BaseModel):
+    code: str
+    verified: bool
+
+
+class RunDetailsResponse(BaseModel):
+    run: RunResponse
+    steps: list[StepResponse]
+    findings: list[FindingResponse]
+    test: GeneratedTestResponse | None
+
+    @classmethod
+    def from_proto(cls, details: runs_pb2.RunDetails) -> "RunDetailsResponse":
+        """Собирает ответ с прогоном, шагами, багами и сгенерированным тестом."""
+        test = None
+        if details.HasField("test"):
+            test = GeneratedTestResponse(code=details.test.code, verified=details.test.verified)
+        return cls(
+            run=RunResponse.from_proto(details.run),
+            steps=[StepResponse.from_proto(step) for step in details.steps],
+            findings=[FindingResponse.from_proto(finding) for finding in details.findings],
+            test=test,
         )
