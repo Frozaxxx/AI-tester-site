@@ -13,6 +13,7 @@ service RunsService {
   rpc GetRun(RunRequest) returns (RunDetails);
   rpc CancelRun(RunRequest) returns (Run);
 
+  rpc ClaimRun(Empty) returns (ClaimedRun);
   rpc StartRun(RunnerRequest) returns (Run);
   rpc AddStep(AddStepRequest) returns (Step);
   rpc AddFinding(AddFindingRequest) returns (Finding);
@@ -20,6 +21,14 @@ service RunsService {
   rpc FinishRun(RunnerRequest) returns (Run);
   rpc CrashRun(RunnerRequest) returns (Run);
   rpc SaveGeneratedTest(SaveGeneratedTestRequest) returns (GeneratedTest);
+}
+
+message Empty {}
+
+// Прогон, который раннер взял из очереди. Пустой, если очередь пуста.
+message ClaimedRun {
+  optional Run run = 1;
+  string owner_id = 2;
 }
 
 // Время везде — unix-время в секундах.

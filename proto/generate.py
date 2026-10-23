@@ -9,6 +9,7 @@ SERVICES = {
     "auth": ["auth.proto"],
     "projects": ["projects.proto"],
     "runs": ["runs.proto"],
+    "runner": ["projects.proto", "runs.proto"],
     "gateway": ["auth.proto", "projects.proto", "runs.proto"],
 }
 

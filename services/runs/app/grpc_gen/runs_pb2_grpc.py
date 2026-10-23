@@ -5,7 +5,7 @@ import warnings
 
 from app.grpc_gen import runs_pb2 as app_dot_grpc__gen_dot_runs__pb2
 
-GRPC_GENERATED_VERSION = '1.84.0'
+GRPC_GENERATED_VERSION = '1.84.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -53,6 +53,11 @@ class RunsServiceStub:
                 '/runs.v1.RunsService/CancelRun',
                 request_serializer=app_dot_grpc__gen_dot_runs__pb2.RunRequest.SerializeToString,
                 response_deserializer=app_dot_grpc__gen_dot_runs__pb2.Run.FromString,
+                _registered_method=True)
+        self.ClaimRun = channel.unary_unary(
+                '/runs.v1.RunsService/ClaimRun',
+                request_serializer=app_dot_grpc__gen_dot_runs__pb2.Empty.SerializeToString,
+                response_deserializer=app_dot_grpc__gen_dot_runs__pb2.ClaimedRun.FromString,
                 _registered_method=True)
         self.StartRun = channel.unary_unary(
                 '/runs.v1.RunsService/StartRun',
@@ -113,6 +118,12 @@ class RunsServiceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def CancelRun(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ClaimRun(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -182,6 +193,11 @@ def add_RunsServiceServicer_to_server(servicer, server):
                     servicer.CancelRun,
                     request_deserializer=app_dot_grpc__gen_dot_runs__pb2.RunRequest.FromString,
                     response_serializer=app_dot_grpc__gen_dot_runs__pb2.Run.SerializeToString,
+            ),
+            'ClaimRun': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClaimRun,
+                    request_deserializer=app_dot_grpc__gen_dot_runs__pb2.Empty.FromString,
+                    response_serializer=app_dot_grpc__gen_dot_runs__pb2.ClaimedRun.SerializeToString,
             ),
             'StartRun': grpc.unary_unary_rpc_method_handler(
                     servicer.StartRun,
@@ -327,6 +343,33 @@ class RunsService:
             '/runs.v1.RunsService/CancelRun',
             app_dot_grpc__gen_dot_runs__pb2.RunRequest.SerializeToString,
             app_dot_grpc__gen_dot_runs__pb2.Run.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClaimRun(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/runs.v1.RunsService/ClaimRun',
+            app_dot_grpc__gen_dot_runs__pb2.Empty.SerializeToString,
+            app_dot_grpc__gen_dot_runs__pb2.ClaimedRun.FromString,
             options,
             channel_credentials,
             insecure,

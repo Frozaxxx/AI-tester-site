@@ -6,6 +6,18 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class Empty(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ClaimedRun(_message.Message):
+    __slots__ = ("run", "owner_id")
+    RUN_FIELD_NUMBER: _ClassVar[int]
+    OWNER_ID_FIELD_NUMBER: _ClassVar[int]
+    run: Run
+    owner_id: str
+    def __init__(self, run: _Optional[_Union[Run, _Mapping]] = ..., owner_id: _Optional[str] = ...) -> None: ...
+
 class Run(_message.Message):
     __slots__ = ("id", "project_id", "scenario_id", "status", "tokens_used", "created_at", "started_at", "finished_at")
     ID_FIELD_NUMBER: _ClassVar[int]
