@@ -158,6 +158,15 @@ class RunsServicer(runs_pb2_grpc.RunsServiceServicer):
         return _run(run)
 
     @handle_errors
+    async def ClaimRun(self, request, context):
+        """Отдаёт раннеру следующий прогон из очереди или пустой ответ."""
+        async with self._service() as service:
+            run = await service.claim_run()
+        if run is None:
+            return runs_pb2.ClaimedRun()
+        return runs_pb2.ClaimedRun(run=_run(run), owner_id=str(run.owner_id))
+
+    @handle_errors
     async def StartRun(self, request, context):
         """Отмечает, что раннер взял прогон в работу."""
         async with self._service() as service:

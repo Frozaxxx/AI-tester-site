@@ -138,3 +138,15 @@ async def test_active_runs_limit(service: RunService) -> None:
 
     await service.cancel_run(OWNER, str(runs[0].id))
     assert await service.create_run(OWNER, PROJECT)
+
+
+async def test_claim_run_takes_oldest_queued(service: RunService) -> None:
+    """Раннер получает самый старый прогон из очереди уже в статусе «идёт»."""
+    assert await service.claim_run() is None
+    first = await service.create_run(OWNER, PROJECT)
+    second = await service.create_run(OWNER, PROJECT)
+    second.created_at = first.created_at
+    claimed = await service.claim_run()
+    assert claimed.id == first.id and claimed.status == RunStatus.RUNNING
+    assert (await service.claim_run()).id == second.id
+    assert await service.claim_run() is None

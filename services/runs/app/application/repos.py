@@ -20,6 +20,9 @@ class RunRepository(Protocol):
     async def count_active(self, owner_id: uuid.UUID) -> int:
         """Считает незавершённые прогоны пользователя, заранее блокируя его прогоны от гонки."""
 
+    async def claim_next(self) -> Run | None:
+        """Берёт самый старый прогон из очереди и блокирует его, пропуская занятые другими."""
+
 
 class StepRepository(Protocol):
     async def add(self, step: Step) -> None:

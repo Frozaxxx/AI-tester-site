@@ -53,3 +53,15 @@ class SqlRunRepository:
             )
         )
         return result or 0
+
+    async def claim_next(self) -> Run | None:
+        """Берёт самый старый прогон из очереди и блокирует его, пропуская занятые другими."""
+        result = await self._session.execute(
+            select(RunOrm)
+            .where(RunOrm.status == RunStatus.QUEUED)
+            .order_by(RunOrm.created_at)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        model = result.scalar_one_or_none()
+        return RunMapper.from_model(model) if model else None

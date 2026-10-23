@@ -78,6 +78,14 @@ class RunService:
         cancel_run(run, now())
         return await self._save(run)
 
+    async def claim_run(self) -> Run | None:
+        """Отдаёт раннеру самый старый прогон из очереди и сразу переводит его в работу."""
+        run = await self._run_repo.claim_next()
+        if run is None:
+            return None
+        start_run(run, now())
+        return await self._save(run)
+
     async def start_run(self, run_id: str) -> Run:
         """Отмечает, что раннер взял прогон в работу."""
         run = await self._locked_run(run_id)

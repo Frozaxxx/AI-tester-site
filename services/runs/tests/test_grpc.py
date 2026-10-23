@@ -93,3 +93,13 @@ async def test_active_runs_limit_is_resource_exhausted(stub) -> None:
     request = pb.CreateRunRequest(owner_id=owner, project_id=PROJECT)
     code = await expect_error(stub.CreateRun(request), grpc.StatusCode.RESOURCE_EXHAUSTED)
     assert code == "TOO_MANY_ACTIVE_RUNS"
+
+
+async def test_claim_run_over_grpc(stub) -> None:
+    """ClaimRun отдаёт прогон из очереди с владельцем, а при пустой очереди пустой ответ."""
+    assert not (await stub.ClaimRun(pb.Empty())).HasField("run")
+    owner = str(uuid.uuid4())
+    run = await stub.CreateRun(pb.CreateRunRequest(owner_id=owner, project_id=PROJECT))
+    claimed = await stub.ClaimRun(pb.Empty())
+    assert claimed.run.id == run.id and claimed.owner_id == owner
+    assert claimed.run.status == "running"
