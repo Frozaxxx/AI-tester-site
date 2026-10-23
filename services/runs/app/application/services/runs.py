@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,8 @@ from app.domain.services import (
     parse_finding_kind,
     start_run,
 )
+
+RUN_MAX_DURATION = timedelta(minutes=15)
 
 
 class RunService:
@@ -85,6 +88,15 @@ class RunService:
             return None
         start_run(run, now())
         return await self._save(run)
+
+    async def expire_stale_runs(self) -> int:
+        """Переводит в ошибку прогоны, которые зависли в работе, например из-за упавшего раннера."""
+        stale = await self._run_repo.list_stale(now() - RUN_MAX_DURATION)
+        for run in stale:
+            crash_run(run, now())
+            await self._run_repo.save(run)
+        await self._session.commit()
+        return len(stale)
 
     async def start_run(self, run_id: str) -> Run:
         """Отмечает, что раннер взял прогон в работу."""

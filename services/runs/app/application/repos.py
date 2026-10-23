@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Protocol
 
 from app.domain.entities import Finding, GeneratedTest, Run, Step
@@ -22,6 +23,9 @@ class RunRepository(Protocol):
 
     async def claim_next(self) -> Run | None:
         """Берёт самый старый прогон из очереди и блокирует его, пропуская занятые другими."""
+
+    async def list_stale(self, started_before: datetime) -> list[Run]:
+        """Находит прогоны, которые идут дольше допустимого, и блокирует их для обновления."""
 
 
 class StepRepository(Protocol):

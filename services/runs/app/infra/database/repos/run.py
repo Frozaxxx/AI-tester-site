@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,3 +66,12 @@ class SqlRunRepository:
         )
         model = result.scalar_one_or_none()
         return RunMapper.from_model(model) if model else None
+
+    async def list_stale(self, started_before: datetime) -> list[Run]:
+        """Находит прогоны, которые идут дольше допустимого, и блокирует их для обновления."""
+        result = await self._session.scalars(
+            select(RunOrm)
+            .where(RunOrm.status == RunStatus.RUNNING, RunOrm.started_at < started_before)
+            .with_for_update(skip_locked=True)
+        )
+        return [RunMapper.from_model(model) for model in result]

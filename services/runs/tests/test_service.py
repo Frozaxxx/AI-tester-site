@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -150,3 +151,19 @@ async def test_claim_run_takes_oldest_queued(service: RunService) -> None:
     assert claimed.id == first.id and claimed.status == RunStatus.RUNNING
     assert (await service.claim_run()).id == second.id
     assert await service.claim_run() is None
+
+
+async def test_stale_runs_are_expired(service: RunService, session: AsyncSession) -> None:
+    """Прогон, который идёт дольше 15 минут, переводится в ошибку, а свежий не трогается."""
+    stale_id = str((await service.create_run(OWNER, PROJECT)).id)
+    fresh_id = str((await service.create_run(OWNER, PROJECT)).id)
+    stale = await service.start_run(stale_id)
+    await service.start_run(fresh_id)
+    stale.started_at -= timedelta(minutes=16)
+    await SqlRunRepository(session).save(stale)
+    await session.commit()
+
+    assert await service.expire_stale_runs() == 1
+    assert (await service.get_run(OWNER, stale_id)).run.status == RunStatus.ERROR
+    assert (await service.get_run(OWNER, fresh_id)).run.status == RunStatus.RUNNING
+    assert await service.expire_stale_runs() == 0
