@@ -137,6 +137,21 @@ uvicorn app.main:app --port 8000
 | `GET /api/v1/runs/{id}` | прогон с шагами, багами и сгенерированным тестом |
 | `POST /api/v1/runs/{id}/cancel` | отменить прогон |
 
+## Раннер
+
+Воркер, который берёт прогоны из очереди runs (самый старый, `SKIP LOCKED`, поэтому раннеров
+можно запускать несколько), открывает сайт проекта в Playwright, выполняет шаги и записывает
+их и найденные ошибки в runs. Пока план без LLM: открыть главную страницу и собрать ошибки
+JavaScript, консоли и ответы 4xx/5xx. Внутренние адреса браузер блокирует; для демо-магазина
+на localhost в своём `.env` поставь `RUNNER_ALLOW_INTERNAL_URLS=true` и
+`PROJECTS_ALLOW_INTERNAL_URLS=true`.
+
+```
+cd services/runner
+playwright install chromium
+python -m app.main
+```
+
 Контракты между сервисами лежат в `proto/`. После их изменения перегенерируй код:
 
 ```
