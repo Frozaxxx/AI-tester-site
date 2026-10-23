@@ -53,6 +53,11 @@ class RunsClient:
             self._stub.CrashRun(pb.RunnerRequest(run_id=run_id), timeout=TIMEOUT_SECONDS)
         )
 
+    async def save_test(self, run_id: str, code: str) -> None:
+        """Сохраняет сгенерированный Playwright-тест прогона."""
+        request = pb.SaveGeneratedTestRequest(run_id=run_id, code=code)
+        await self._call(self._stub.SaveGeneratedTest(request, timeout=TIMEOUT_SECONDS))
+
     async def _call(self, call) -> None:
         """Выполняет вызов и превращает отказ из-за статуса прогона в отмену прогона."""
         try:

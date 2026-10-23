@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from app.application.codegen import generate_test
 from app.application.interfaces import BrowserFactory, Planner, Projects, Runs
 from app.domain.entities import Action, ActionResult, Job, PageProblem, ProblemKind
 from app.domain.exceptions import RunCancelledError
@@ -52,8 +53,9 @@ class RunWorker:
         try:
             async with asyncio.timeout(RUN_TIMEOUT_SECONDS):
                 job = await self._load_job(claimed)
-                await self._execute(job)
+                actions = await self._execute(job)
             await self._runs.finish(run_id)
+            await self._save_test(job, actions)
         except RunCancelledError:
             logger.info("прогон %s отменён, останавливаемся", run_id)
         except Exception:
@@ -82,10 +84,11 @@ class RunWorker:
             scenario_text=scenario_text,
         )
 
-    async def _execute(self, job: Job) -> None:
-        """Выполняет план по шагам и записывает каждый шаг и найденные проблемы в runs."""
+    async def _execute(self, job: Job) -> list[Action]:
+        """Выполняет план по шагам, записывает шаги и проблемы в runs и возвращает шаги."""
+        actions = self._planner(job)
         async with self._browser_factory(job.base_url) as browser:
-            for index, action in enumerate(self._planner(job)):
+            for index, action in enumerate(actions):
                 result = await browser.perform(action)
                 await self._runs.add_step(job.run_id, index, action, result)
                 problems = browser.take_problems()
@@ -93,6 +96,16 @@ class RunWorker:
                     problems.insert(0, problem)
                 for problem in problems:
                     await self._runs.add_finding(job.run_id, problem, index)
+        return actions
+
+    async def _save_test(self, job: Job, actions: list[Action]) -> None:
+        """Сохраняет Playwright-тест из шагов прогона и не роняет раннер, если это не удалось."""
+        if not actions:
+            return
+        try:
+            await self._runs.save_test(job.run_id, generate_test(job, actions))
+        except Exception:
+            logger.exception("не удалось сохранить тест прогона %s", job.run_id)
 
     async def _crash(self, run_id: str) -> None:
         """Пытается отметить прогон сломанным и не падает, если runs недоступен."""

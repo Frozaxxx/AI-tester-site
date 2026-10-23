@@ -21,6 +21,9 @@ class Runs(Protocol):
     async def crash(self, run_id: str) -> None:
         """Отмечает, что прогон сломался из-за раннера."""
 
+    async def save_test(self, run_id: str, code: str) -> None:
+        """Сохраняет сгенерированный Playwright-тест прогона."""
+
 
 class Projects(Protocol):
     async def get_project(self, owner_id: str, project_id: str):
