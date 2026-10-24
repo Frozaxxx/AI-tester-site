@@ -1,13 +1,13 @@
 import asyncio
 import logging
 
+from app.application.agent import SmokeAgent
 from app.application.codegen import generate_test
-from app.application.interfaces import BrowserFactory, Planner, Projects, Runs
+from app.application.interfaces import Agent, Browser, BrowserFactory, Projects, Runs
 from app.domain.entities import Action, ActionResult, Job, PageProblem, ProblemKind
 from app.domain.exceptions import RunCancelledError
 
 RUN_TIMEOUT_SECONDS = 600
-
 BLOCKED_MARKERS = ("ERR_BLOCKED_BY_CLIENT", "заблокирован")
 
 logger = logging.getLogger("runner")
@@ -26,9 +26,30 @@ def navigation_problem(action: Action, result: ActionResult) -> PageProblem | No
     )
 
 
-def smoke_plan(job: Job) -> list[Action]:
-    """Простой план без LLM: открыть главную страницу сайта и собрать ошибки."""
-    return [Action(name="goto", value="/")]
+class RunRecorder:
+    def __init__(self, runs: Runs, run_id: str, browser: Browser) -> None:
+        self._runs = runs
+        self._run_id = run_id
+        self._browser = browser
+        self._index = -1
+
+    async def step(self, action: Action, result: ActionResult) -> None:
+        """Записывает шаг и все проблемы страницы, которые появились после него."""
+        self._index += 1
+        await self._runs.add_step(self._run_id, self._index, action, result)
+        problems = self._browser.take_problems()
+        if (problem := navigation_problem(action, result)) is not None:
+            problems.insert(0, problem)
+        for problem in problems:
+            await self._runs.add_finding(self._run_id, problem, self._index)
+
+    async def bug(self, problem: PageProblem) -> None:
+        """Записывает баг, который заметил агент, на последнем шаге."""
+        await self._runs.add_finding(self._run_id, problem, max(self._index, 0))
+
+    async def tokens(self, count: int) -> None:
+        """Прибавляет к прогону потраченные токены LLM."""
+        await self._runs.add_tokens(self._run_id, count)
 
 
 class RunWorker:
@@ -37,12 +58,12 @@ class RunWorker:
         runs: Runs,
         projects: Projects,
         browser_factory: BrowserFactory,
-        planner: Planner = smoke_plan,
+        agent: Agent | None = None,
     ) -> None:
         self._runs = runs
         self._projects = projects
         self._browser_factory = browser_factory
-        self._planner = planner
+        self._agent = agent or SmokeAgent()
 
     async def run_once(self) -> bool:
         """Берёт один прогон из очереди и выполняет его, а при пустой очереди возвращает False."""
@@ -85,18 +106,10 @@ class RunWorker:
         )
 
     async def _execute(self, job: Job) -> list[Action]:
-        """Выполняет план по шагам, записывает шаги и проблемы в runs и возвращает шаги."""
-        actions = self._planner(job)
+        """Запускает агента на сайте проекта и возвращает выполненные им действия."""
         async with self._browser_factory(job.base_url) as browser:
-            for index, action in enumerate(actions):
-                result = await browser.perform(action)
-                await self._runs.add_step(job.run_id, index, action, result)
-                problems = browser.take_problems()
-                if (problem := navigation_problem(action, result)) is not None:
-                    problems.insert(0, problem)
-                for problem in problems:
-                    await self._runs.add_finding(job.run_id, problem, index)
-        return actions
+            recorder = RunRecorder(self._runs, job.run_id, browser)
+            return await self._agent.run(job, browser, recorder)
 
     async def _save_test(self, job: Job, actions: list[Action]) -> None:
         """Сохраняет Playwright-тест из шагов прогона и не роняет раннер, если это не удалось."""

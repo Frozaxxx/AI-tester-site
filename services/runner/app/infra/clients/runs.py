@@ -41,6 +41,11 @@ class RunsClient:
         )
         await self._call(self._stub.AddFinding(request, timeout=TIMEOUT_SECONDS))
 
+    async def add_tokens(self, run_id: str, count: int) -> None:
+        """Прибавляет к прогону потраченные токены LLM."""
+        request = pb.AddTokensRequest(run_id=run_id, count=count)
+        await self._call(self._stub.AddTokens(request, timeout=TIMEOUT_SECONDS))
+
     async def finish(self, run_id: str) -> None:
         """Завершает прогон, итог сервис runs считает сам по записанным багам."""
         await self._call(
