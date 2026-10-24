@@ -3,11 +3,13 @@ import logging
 
 import grpc
 
+from app.application.agent import LlmAgent
 from app.application.worker import RunWorker
 from app.config import settings
 from app.infra.browser import SiteBrowser
 from app.infra.clients.projects import ProjectsClient
 from app.infra.clients.runs import RunsClient
+from app.infra.llm import make_chat_model
 
 logger = logging.getLogger("runner")
 
@@ -23,8 +25,12 @@ async def work() -> None:
         grpc.aio.insecure_channel(settings.runs_grpc_address) as runs_channel,
         grpc.aio.insecure_channel(settings.projects_grpc_address) as projects_channel,
     ):
-        worker = RunWorker(RunsClient(runs_channel), ProjectsClient(projects_channel), _browser)
-        logger.info("раннер ждёт прогоны")
+        model = make_chat_model(settings)
+        agent = LlmAgent(model) if model is not None else None
+        worker = RunWorker(
+            RunsClient(runs_channel), ProjectsClient(projects_channel), _browser, agent
+        )
+        logger.info("раннер ждёт прогоны, LLM: %s", settings.llm_provider)
         while True:
             try:
                 worked = await worker.run_once()

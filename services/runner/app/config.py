@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,6 +13,13 @@ class Settings(BaseSettings):
     projects_grpc_address: str
     allow_internal_urls: bool
     poll_interval_seconds: float
+    llm_provider: Literal["gigachat", "openrouter", "none"] = "none"
+    gigachat_credentials: str | None = None
+    gigachat_scope: str = "GIGACHAT_API_PERS"
+    gigachat_model: str = "GigaChat-2-Max"
+    gigachat_ca_bundle_file: str | None = None
+    openrouter_api_key: str | None = None
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
 
 
 settings = Settings()

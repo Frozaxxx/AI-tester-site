@@ -7,6 +7,10 @@ dependencies = [
     "playwright>=1.56",
     "grpcio>=1.84",
     "protobuf>=7.35",
+    "langgraph>=1.2",
+    "langchain-core>=1.7",
+    "langchain-gigachat>=0.5",
+    "langchain-openai>=1.7",
 ]
 
 [dependency-groups]
