@@ -17,7 +17,14 @@ from playwright.async_api import (
     expect,
 )
 
-from app.domain.entities import Action, ActionResult, PageProblem, ProblemKind
+from app.domain.entities import (
+    Action,
+    ActionResult,
+    Element,
+    PageProblem,
+    PageSnapshot,
+    ProblemKind,
+)
 from app.domain.exceptions import ActionError
 from app.domain.services import (
     is_same_site,
@@ -32,11 +39,58 @@ ALLOWED_SCHEMES = frozenset({"http", "https", "data", "blob", "about"})
 CHECKED_RESOURCES = frozenset({"document", "xhr", "fetch", "script", "stylesheet", "image"})
 ERROR_MAX_LENGTH = 500
 PROBLEMS_MAX = 50
+SNAPSHOT_TEXT_MAX = 3_000
+SNAPSHOT_ELEMENTS_MAX = 60
+SNAPSHOT_SCRIPT = """(limit) => {
+  const selector = 'a[href], button, input:not([type=hidden]), select, textarea, [role=button]';
+  const visible = (el) => {
+    const box = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    return box.width > 0 && box.height > 0 && style.visibility !== 'hidden';
+  };
+  const roleOf = (el) => {
+    const tag = el.tagName.toLowerCase();
+    if (el.getAttribute('role')) return el.getAttribute('role');
+    if (tag === 'a') return 'link';
+    if (tag === 'select') return 'combobox';
+    if (tag === 'textarea') return 'textbox';
+    if (tag === 'input') {
+      const type = (el.getAttribute('type') || 'text').toLowerCase();
+      if (type === 'checkbox' || type === 'radio') return type;
+      if (type === 'submit' || type === 'button') return 'button';
+      return 'textbox';
+    }
+    return tag;
+  };
+  const nameOf = (el) => (el.getAttribute('aria-label') || el.innerText || el.value
+    || el.getAttribute('placeholder') || el.getAttribute('name') || el.getAttribute('title') || '')
+    .trim().replace(/\\s+/g, ' ').slice(0, 80);
+  return [...document.querySelectorAll(selector)].filter(visible).slice(0, limit).map((el) => ({
+    tag: el.tagName.toLowerCase(), role: roleOf(el), name: nameOf(el),
+    attr: el.getAttribute('name'), id: el.id,
+  }));
+}"""
 
 
 def _short(message: str) -> str:
     """Оставляет от ошибки Playwright первую строку без длинного лога вызова."""
     return message.strip().splitlines()[0][:ERROR_MAX_LENGTH] if message.strip() else "Ошибка"
+
+
+def _quote(value: str) -> str:
+    """Экранирует строку для селектора Playwright в двойных кавычках."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _locator(item: dict) -> str:
+    """Строит устойчивый локатор элемента: по id, по name поля или по роли и имени."""
+    if item["id"]:
+        return f"id={_quote(item['id'])}"
+    if item["attr"] and item["tag"] in ("input", "select", "textarea"):
+        return f"{item['tag']}[name={_quote(item['attr'])}]"
+    if item["name"]:
+        return f"role={item['role']}[name={_quote(item['name'])}]"
+    return item["tag"]
 
 
 class SiteBrowser:
@@ -82,6 +136,23 @@ class SiteBrowser:
     def url(self) -> str:
         """Возвращает адрес открытой страницы."""
         return self._page.url
+
+    async def snapshot(self) -> PageSnapshot:
+        """Снимает состояние страницы: адрес, видимый текст и элементы с готовыми локаторами."""
+        page = self._page
+        try:
+            text = await page.locator("body").inner_text(timeout=ACTION_TIMEOUT_MS)
+            raw = await page.evaluate(SNAPSHOT_SCRIPT, SNAPSHOT_ELEMENTS_MAX)
+            title = await page.title()
+        except Error:
+            return PageSnapshot(url=page.url, title="", text="", elements=[])
+        elements = [
+            Element(index=i, role=item["role"], name=item["name"], locator=_locator(item))
+            for i, item in enumerate(raw)
+        ]
+        return PageSnapshot(
+            url=page.url, title=title, text=text[:SNAPSHOT_TEXT_MAX], elements=elements
+        )
 
     async def perform(self, action: Action) -> ActionResult:
         """Выполняет одно действие на странице и сообщает, получилось ли оно."""
