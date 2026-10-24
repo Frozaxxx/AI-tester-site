@@ -32,6 +32,9 @@ class FakeRuns:
     async def add_finding(self, run_id: str, problem: PageProblem, step_index: int) -> None:
         self.findings.append((problem.title, step_index))
 
+    async def add_tokens(self, run_id: str, count: int) -> None:
+        pass
+
     async def finish(self, run_id: str) -> None:
         self.finished.append(run_id)
 
@@ -78,26 +81,41 @@ def factory(browser: FakeBrowser):
     return make
 
 
-def plan(job: Job) -> list[Action]:
-    """Тестовый план из трёх действий."""
-    return [
-        Action(name="goto", value="/"),
-        Action(name="click", locator="text=Купить"),
-        Action(name="expect_text", value="Корзина"),
-    ]
+class PlanAgent:
+    def __init__(self, actions: list[Action] | None = None) -> None:
+        self.actions = (
+            actions
+            if actions is not None
+            else [
+                Action(name="goto", value="/"),
+                Action(name="click", locator="text=Купить"),
+                Action(name="expect_text", value="Корзина"),
+            ]
+        )
+        self.jobs: list[Job] = []
+
+    async def run(self, job: Job, browser, recorder) -> list[Action]:
+        """Выполняет заранее заданные действия через браузер и записывает шаги."""
+        self.jobs.append(job)
+        for action in self.actions:
+            await recorder.step(action, await browser.perform(action))
+        return self.actions
 
 
 async def test_empty_queue() -> None:
     """При пустой очереди воркер ничего не делает и сообщает об этом."""
     runs = FakeRuns()
     runs.queue.clear()
-    assert await RunWorker(runs, FakeProjects(), factory(FakeBrowser()), plan).run_once() is False
+    assert (
+        await RunWorker(runs, FakeProjects(), factory(FakeBrowser()), PlanAgent()).run_once()
+        is False
+    )
 
 
 async def test_run_is_executed_and_finished() -> None:
     """Воркер выполняет план на сайте проекта, пишет шаги и баги и завершает прогон."""
     runs, browser = FakeRuns(), FakeBrowser()
-    assert await RunWorker(runs, FakeProjects(), factory(browser), plan).run_once() is True
+    assert await RunWorker(runs, FakeProjects(), factory(browser), PlanAgent()).run_once() is True
     assert browser.base_url == "https://shop.example.com"
     assert runs.steps == [(0, "goto", True), (1, "click", False), (2, "expect_text", True)]
     assert runs.findings == [(PROBLEM.title, 0)]
@@ -105,24 +123,19 @@ async def test_run_is_executed_and_finished() -> None:
     assert len(runs.tests) == 1 and "page.goto(BASE_URL + '/')" in runs.tests[0]
 
 
-async def test_scenario_text_reaches_planner() -> None:
-    """Если прогон по сценарию, планировщик получает его текст."""
-    seen: list[Job] = []
-
-    def remember(job: Job) -> list[Action]:
-        seen.append(job)
-        return []
-
+async def test_scenario_text_reaches_agent() -> None:
+    """Если прогон по сценарию, агент получает его текст."""
+    agent = PlanAgent(actions=[])
     runs = FakeRuns(scenario_id="scenario-1")
-    await RunWorker(runs, FakeProjects(), factory(FakeBrowser()), remember).run_once()
-    assert seen[0].scenario_text == "Добавь товар в корзину"
-    assert runs.finished == ["run-1"]
+    await RunWorker(runs, FakeProjects(), factory(FakeBrowser()), agent).run_once()
+    assert agent.jobs[0].scenario_text == "Добавь товар в корзину"
+    assert runs.finished == ["run-1"] and runs.tests == []
 
 
 async def test_cancelled_run_stops_without_crash() -> None:
     """Если пользователь отменил прогон, воркер молча останавливается."""
     runs = FakeRuns(cancel_on_step=1)
-    await RunWorker(runs, FakeProjects(), factory(FakeBrowser()), plan).run_once()
+    await RunWorker(runs, FakeProjects(), factory(FakeBrowser()), PlanAgent()).run_once()
     assert runs.steps == [(0, "goto", True)]
     assert runs.finished == [] and runs.crashed == [] and runs.tests == []
 
@@ -132,7 +145,7 @@ async def test_failures_crash_the_run(scenario_id: str | None) -> None:
     """Падение браузера или удалённый сценарий помечают прогон сломанным."""
     runs = FakeRuns(scenario_id=scenario_id)
     browser = FakeBrowser(fail=scenario_id is None)
-    await RunWorker(runs, FakeProjects(), factory(browser), plan).run_once()
+    await RunWorker(runs, FakeProjects(), factory(browser), PlanAgent()).run_once()
     assert runs.crashed == ["run-1"] and runs.finished == []
 
 
