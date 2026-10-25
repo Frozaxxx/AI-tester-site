@@ -43,7 +43,7 @@ tests/
 
 ## Стек
 
-Python, Playwright, FastAPI, LangGraph, PostgreSQL, RabbitMQ, Redis, MinIO, Docker.
+Python, FastAPI, gRPC, PostgreSQL, Redis, RabbitMQ (FastStream), Playwright, LangGraph, GigaChat, Docker.
 
 ## Секреты
 
@@ -138,6 +138,12 @@ uvicorn app.main:app --port 8000
 | `POST /api/v1/runs/{id}/cancel` | отменить прогон |
 
 ## Раннер
+
+Новые прогоны доходят до раннера через RabbitMQ: runs после создания прогона публикует
+событие в очередь `runs.created` (FastStream), раннер по нему сразу берёт прогон. Сам прогон
+раннер забирает из базы через `ClaimRun`, так что событие — только сигнал «пора». Если брокер
+недоступен или сообщение потерялось, раннер всё равно найдёт прогон редким опросом
+(`RUNNER_POLL_INTERVAL_SECONDS`). Панель RabbitMQ: http://localhost:15672.
 
 Воркер, который берёт прогоны из очереди runs (самый старый, `SKIP LOCKED`, поэтому раннеров
 можно запускать несколько), открывает сайт проекта в Playwright, выполняет шаги и записывает
