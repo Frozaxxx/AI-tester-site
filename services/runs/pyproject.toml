@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.4",
     "grpcio>=1.84",
     "protobuf>=7.35",
+    "faststream[rabbit]>=0.7",
 ]
 
 [dependency-groups]

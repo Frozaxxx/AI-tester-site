@@ -2,11 +2,13 @@ import asyncio
 import logging
 
 import grpc
+from faststream.rabbit import RabbitBroker
 
 from app.api.servicer import RunsServicer
 from app.application.services import RunService
 from app.config import settings
 from app.grpc_gen import runs_pb2_grpc
+from app.infra.broker import RabbitRunEvents
 from app.infra.database.connection import session_factory
 from app.infra.database.repos import (
     SqlFindingRepository,
@@ -41,8 +43,12 @@ async def watch_stale_runs() -> None:
 
 async def serve() -> None:
     """Запускает gRPC-сервер прогонов и держит его, пока процесс не остановят."""
+    broker = RabbitBroker(settings.rabbitmq_url)
+    await broker.start()
     server = grpc.aio.server()
-    runs_pb2_grpc.add_RunsServiceServicer_to_server(RunsServicer(session_factory), server)
+    runs_pb2_grpc.add_RunsServiceServicer_to_server(
+        RunsServicer(session_factory, RabbitRunEvents(broker)), server
+    )
     address = f"{settings.grpc_host}:{settings.grpc_port}"
     server.add_insecure_port(address)
     await server.start()
@@ -52,6 +58,7 @@ async def serve() -> None:
         await server.wait_for_termination()
     finally:
         watchdog.cancel()
+        await broker.stop()
 
 
 if __name__ == "__main__":

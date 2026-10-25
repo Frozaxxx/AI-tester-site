@@ -8,6 +8,7 @@ import grpc
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.application.dtos import RunDetails
+from app.application.events import RunEvents
 from app.application.services import RunService
 from app.domain.entities import Finding, GeneratedTest, Run, Step
 from app.domain.exceptions import DomainError
@@ -112,8 +113,11 @@ def _optional(request, field: str) -> str | None:
 
 
 class RunsServicer(runs_pb2_grpc.RunsServiceServicer):
-    def __init__(self, session_factory: async_sessionmaker) -> None:
+    def __init__(
+        self, session_factory: async_sessionmaker, events: RunEvents | None = None
+    ) -> None:
         self._session_factory = session_factory
+        self._events = events
 
     @asynccontextmanager
     async def _service(self) -> AsyncIterator[RunService]:
@@ -125,6 +129,7 @@ class RunsServicer(runs_pb2_grpc.RunsServiceServicer):
                 step_repo=SqlStepRepository(session),
                 finding_repo=SqlFindingRepository(session),
                 test_repo=SqlGeneratedTestRepository(session),
+                events=self._events,
             )
 
     @handle_errors
