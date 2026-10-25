@@ -167,3 +167,32 @@ async def test_stale_runs_are_expired(service: RunService, session: AsyncSession
     assert (await service.get_run(OWNER, stale_id)).run.status == RunStatus.ERROR
     assert (await service.get_run(OWNER, fresh_id)).run.status == RunStatus.RUNNING
     assert await service.expire_stale_runs() == 0
+
+
+class RecordingEvents:
+    def __init__(self, fail: bool = False) -> None:
+        self.fail = fail
+        self.created: list[str] = []
+
+    async def run_created(self, run_id: str) -> None:
+        if self.fail:
+            raise ConnectionError("брокер недоступен")
+        self.created.append(run_id)
+
+
+@pytest.mark.parametrize("fail", [False, True])
+async def test_run_created_event(session: AsyncSession, fail: bool) -> None:
+    """О новом прогоне уходит событие, а сбой брокера не мешает поставить прогон в очередь."""
+    events = RecordingEvents(fail=fail)
+    service = RunService(
+        session,
+        SqlRunRepository(session),
+        SqlStepRepository(session),
+        SqlFindingRepository(session),
+        SqlGeneratedTestRepository(session),
+        events,
+    )
+    run = await service.create_run(OWNER, PROJECT)
+    assert run.status == RunStatus.QUEUED
+    assert events.created == ([] if fail else [str(run.id)])
+    assert (await service.claim_run()).id == run.id

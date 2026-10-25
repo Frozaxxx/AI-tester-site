@@ -1,9 +1,11 @@
+import logging
 import uuid
 from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.dtos import RunDetails
+from app.application.events import RunEvents
 from app.application.repos import (
     FindingRepository,
     GeneratedTestRepository,
@@ -28,6 +30,8 @@ from app.domain.services import (
 
 RUN_MAX_DURATION = timedelta(minutes=15)
 
+logger = logging.getLogger("runs")
+
 
 class RunService:
     def __init__(
@@ -37,12 +41,14 @@ class RunService:
         step_repo: StepRepository,
         finding_repo: FindingRepository,
         test_repo: GeneratedTestRepository,
+        events: RunEvents | None = None,
     ) -> None:
         self._session = session
         self._run_repo = run_repo
         self._step_repo = step_repo
         self._finding_repo = finding_repo
         self._test_repo = test_repo
+        self._events = events
 
     async def create_run(
         self, owner_id: str, project_id: str, scenario_id: str | None = None
@@ -57,7 +63,17 @@ class RunService:
         )
         await self._run_repo.add(run)
         await self._session.commit()
+        await self._notify_created(run)
         return run
+
+    async def _notify_created(self, run: Run) -> None:
+        """Сообщает раннерам о новом прогоне, а при сбое брокера полагается на опрос очереди."""
+        if self._events is None:
+            return
+        try:
+            await self._events.run_created(str(run.id))
+        except Exception:
+            logger.warning("не удалось отправить событие о прогоне %s в брокер", run.id)
 
     async def list_runs(self, owner_id: str, project_id: str) -> list[Run]:
         """Возвращает прогоны проекта пользователя, сначала новые."""
