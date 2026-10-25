@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Оформление заказа — Demo Shop{% endblock %}
+{% block content %}
+  <h1>Оформление заказа</h1>
+  <p class="price">К оплате: {{ "{:,}".format(total).replace(",", " ") }} ₽</p>
+  <form class="stack" action="/checkout" method="post">
+    <label>Имя <input name="name" placeholder="Иван Иванов"></label>
+    <label>Email <input name="email" type="text" placeholder="ivan@example.com"></label>
+    <label>Адрес доставки <textarea name="address" placeholder="Город, улица, дом"></textarea></label>
+    <button type="submit">Подтвердить заказ</button>
+  </form>
+{% endblock %}

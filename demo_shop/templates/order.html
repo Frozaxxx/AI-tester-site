@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Заказ оформлен — Demo Shop{% endblock %}
+{% block content %}
+  <h1>Заказ №{{ order.id }} оформлен</h1>
+  <p>Получатель: {{ order.name }}</p>
+  <p>Email: {{ order.email }}</p>
+  <p>Адрес: {{ order.address }}</p>
+  <p class="price">Сумма: {{ "{:,}".format(order.total).replace(",", " ") }} ₽</p>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Поиск — Demo Shop{% endblock %}
+{% block content %}
+  <h1>Поиск: {{ query }}</h1>
+  {% if products %}
+    <ul class="grid">
+      {% for p in products %}
+        <li class="card">
+          <h2><a href="/products/{{ p.id }}">{{ p.name }}</a></h2>
+          <p class="price">{{ "{:,}".format(p.price).replace(",", " ") }} ₽</p>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Ничего не найдено.</p>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Корзина — Demo Shop{% endblock %}
+{% block content %}
+  <h1>Корзина</h1>
+  {% if lines %}
+    <table>
+      <tr><th>Товар</th><th>Цена</th><th>Количество</th><th>Сумма</th></tr>
+      {% for product, quantity in lines %}
+        <tr>
+          <td><a href="/products/{{ product.id }}">{{ product.name }}</a></td>
+          <td>{{ "{:,}".format(product.price).replace(",", " ") }} ₽</td>
+          <td>{{ quantity }}</td>
+          <td>{{ "{:,}".format(product.price * quantity).replace(",", " ") }} ₽</td>
+        </tr>
+      {% endfor %}
+    </table>
+    <p class="price" id="cart-total">Итого: {{ "{:,}".format(total).replace(",", " ") }} ₽</p>
+    <form action="/cart/clear" method="post"><button type="submit">Очистить корзину</button></form>
+    <p><a href="/checkout">Оформить заказ</a></p>
+  {% else %}
+    <p>Корзина пуста. <a href="/products">Перейти в каталог</a></p>
+  {% endif %}
+{% endblock %}
