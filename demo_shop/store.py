@@ -11,13 +11,57 @@ class Product:
     description: str
 
 
+@dataclass(frozen=True)
+class Order:
+    id: int
+    name: str
+    email: str
+    address: str
+    total: int
+
+
 @dataclass
 class Store:
     products: list[Product] = field(default_factory=list)
+    carts: dict[str, dict[int, int]] = field(default_factory=dict)
+    orders: list[Order] = field(default_factory=list)
 
     def product(self, product_id: int) -> Product | None:
         """Находит товар по id."""
         return next((p for p in self.products if p.id == product_id), None)
+
+    def cart(self, cart_id: str) -> dict[int, int]:
+        """Возвращает корзину покупателя: id товара и количество."""
+        return self.carts.setdefault(cart_id, {})
+
+    def cart_lines(self, cart_id: str) -> list[tuple[Product, int]]:
+        """Возвращает товары корзины вместе с количеством."""
+        return [(self.product(pid), qty) for pid, qty in self.cart(cart_id).items()]
+
+    def cart_total(self, cart_id: str) -> int:
+        """Считает сумму корзины."""
+        # BUG cart_total: количество не учитывается, считается только цена за штуку.
+        return sum(product.price for product, _ in self.cart_lines(cart_id))
+
+    def search(self, query: str) -> list[Product]:
+        """Ищет товары по названию без учёта регистра."""
+        # BUG search_empty: пустой запрос роняет сервер с ошибкой 500.
+        first_word = query.split()[0].lower()
+        return [p for p in self.products if first_word in p.name.lower()]
+
+    def place_order(self, cart_id: str, name: str, email: str, address: str) -> Order:
+        """Оформляет заказ из корзины и очищает её."""
+        # BUG checkout_validation: пустые имя, email и адрес принимаются без ошибки.
+        order = Order(
+            id=len(self.orders) + 1,
+            name=name,
+            email=email,
+            address=address,
+            total=self.cart_total(cart_id),
+        )
+        self.orders.append(order)
+        self.carts.pop(cart_id, None)
+        return order
 
 
 _CATALOG = [
