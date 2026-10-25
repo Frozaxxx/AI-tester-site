@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     runs_grpc_address: str
     projects_grpc_address: str
+    rabbitmq_url: str
     allow_internal_urls: bool
     poll_interval_seconds: float
     llm_provider: Literal["gigachat", "openrouter", "none"] = "none"

@@ -4,8 +4,10 @@ import logging
 import grpc
 
 from app.application.agent import LlmAgent
+from app.application.loop import WorkLoop
 from app.application.worker import RunWorker
 from app.config import settings
+from app.infra.broker import make_broker
 from app.infra.browser import SiteBrowser
 from app.infra.clients.projects import ProjectsClient
 from app.infra.clients.runs import RunsClient
@@ -20,7 +22,7 @@ def _browser(base_url: str) -> SiteBrowser:
 
 
 async def work() -> None:
-    """Бесконечно берёт прогоны из очереди и выполняет их по одному."""
+    """Выполняет прогоны по событиям из RabbitMQ и подстраховывается редким опросом очереди."""
     async with (
         grpc.aio.insecure_channel(settings.runs_grpc_address) as runs_channel,
         grpc.aio.insecure_channel(settings.projects_grpc_address) as projects_channel,
@@ -30,15 +32,14 @@ async def work() -> None:
         worker = RunWorker(
             RunsClient(runs_channel), ProjectsClient(projects_channel), _browser, agent
         )
+        loop = WorkLoop(worker, settings.poll_interval_seconds)
+        broker = make_broker(settings.rabbitmq_url, loop)
+        await broker.start()
         logger.info("раннер ждёт прогоны, LLM: %s", settings.llm_provider)
-        while True:
-            try:
-                worked = await worker.run_once()
-            except grpc.aio.AioRpcError as exc:
-                logger.warning("runs недоступен: %s", exc.code())
-                worked = False
-            if not worked:
-                await asyncio.sleep(settings.poll_interval_seconds)
+        try:
+            await loop.run_forever()
+        finally:
+            await broker.stop()
 
 
 if __name__ == "__main__":
