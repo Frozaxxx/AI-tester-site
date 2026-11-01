@@ -32,20 +32,33 @@ class RunRecorder:
         self._run_id = run_id
         self._browser = browser
         self._index = -1
+        self._seen: set[str] = set()
 
-    async def step(self, action: Action, result: ActionResult) -> None:
-        """Записывает шаг и все проблемы страницы, которые появились после него."""
+    async def step(self, action: Action, result: ActionResult) -> list[str]:
+        """Записывает шаг и новые проблемы страницы, возвращает их заголовки."""
         self._index += 1
         await self._runs.add_step(self._run_id, self._index, action, result)
         problems = self._browser.take_problems()
         if (problem := navigation_problem(action, result)) is not None:
             problems.insert(0, problem)
+        recorded = []
         for problem in problems:
-            await self._runs.add_finding(self._run_id, problem, self._index)
+            if await self._add(problem):
+                recorded.append(problem.title)
+        return recorded
 
-    async def bug(self, problem: PageProblem) -> None:
-        """Записывает баг, который заметил агент, на последнем шаге."""
+    async def bug(self, problem: PageProblem) -> bool:
+        """Записывает баг, который заметил агент, и возвращает False, если такой уже был."""
+        return await self._add(problem)
+
+    async def _add(self, problem: PageProblem) -> bool:
+        """Записывает проблему на последнем шаге, если такой же ещё не было в прогоне."""
+        key = problem.title.strip().lower()
+        if key in self._seen:
+            return False
+        self._seen.add(key)
         await self._runs.add_finding(self._run_id, problem, max(self._index, 0))
+        return True
 
     async def tokens(self, count: int) -> None:
         """Прибавляет к прогону потраченные токены LLM."""

@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 
-from app.application.worker import RunWorker, navigation_problem
+from app.application.worker import RunRecorder, RunWorker, navigation_problem
 from app.domain.entities import Action, ActionResult, Job, PageProblem, ProblemKind
 from app.domain.exceptions import RunCancelledError
 from app.grpc_gen import projects_pb2, runs_pb2
@@ -147,6 +147,20 @@ async def test_failures_crash_the_run(scenario_id: str | None) -> None:
     browser = FakeBrowser(fail=scenario_id is None)
     await RunWorker(runs, FakeProjects(), factory(browser), PlanAgent()).run_once()
     assert runs.crashed == ["run-1"] and runs.finished == []
+
+
+async def test_same_problem_is_recorded_once() -> None:
+    """Одна и та же проблема на разных шагах и повтор от агента записываются один раз."""
+    runs = FakeRuns()
+    browser = FakeBrowser()
+    browser.take_problems = lambda: [PROBLEM]
+    recorder = RunRecorder(runs, "run-1", browser)
+    assert await recorder.step(Action(name="goto", value="/"), ActionResult(ok=True)) == [
+        PROBLEM.title
+    ]
+    assert await recorder.step(Action(name="goto", value="/"), ActionResult(ok=True)) == []
+    assert await recorder.bug(PROBLEM) is False
+    assert runs.findings == [(PROBLEM.title, 0)]
 
 
 def test_navigation_problem() -> None:

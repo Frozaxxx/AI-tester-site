@@ -48,11 +48,11 @@ class Browser(Protocol):
 
 
 class Recorder(Protocol):
-    async def step(self, action: Action, result: ActionResult) -> None:
-        """Записывает шаг агента и найденные после него проблемы страницы."""
+    async def step(self, action: Action, result: ActionResult) -> list[str]:
+        """Записывает шаг агента и возвращает заголовки новых проблем страницы."""
 
-    async def bug(self, problem: PageProblem) -> None:
-        """Записывает баг, который заметил сам агент."""
+    async def bug(self, problem: PageProblem) -> bool:
+        """Записывает баг, который заметил сам агент, и возвращает False для повтора."""
 
     async def tokens(self, count: int) -> None:
         """Учитывает потраченные токены LLM."""
