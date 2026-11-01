@@ -61,7 +61,7 @@ cd services/runs
 alembic upgrade head
 ```
 
-То же для `services/auth` и `services/projects`. Базы: auth на порту 5432, projects на 5433, runs на 5434. Новая миграция после изменения моделей:
+То же для `services/auth` и `services/projects`. Базы: auth на порту 5435, projects на 5433, runs на 5434. Новая миграция после изменения моделей:
 
 ```
 alembic revision --autogenerate -m "что изменилось"
