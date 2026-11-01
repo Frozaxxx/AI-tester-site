@@ -1,7 +1,7 @@
 x-postgres: &postgres
   image: postgres:17
   healthcheck:
-    test: ["CMD", "pg_isready"]
+    test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
     interval: 5s
     timeout: 3s
     retries: 10
@@ -68,6 +68,110 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    restart: on-failure
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      AUTH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@auth-db:5432/auth
+      AUTH_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      AUTH_JWT_PRIVATE_KEY: ${AUTH_JWT_PRIVATE_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: ${JWT_AUDIENCE}
+      AUTH_ACCESS_TOKEN_TTL_MINUTES: ${AUTH_ACCESS_TOKEN_TTL_MINUTES}
+      AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS}
+      AUTH_LOGIN_ATTEMPTS_LIMIT: ${AUTH_LOGIN_ATTEMPTS_LIMIT}
+      AUTH_LOGIN_BLOCK_MINUTES: ${AUTH_LOGIN_BLOCK_MINUTES}
+      AUTH_GRPC_HOST: 0.0.0.0
+      AUTH_GRPC_PORT: 50051
+
+  projects:
+    build:
+      context: .
+      dockerfile: services/projects/Dockerfile
+    restart: on-failure
+    depends_on:
+      projects-db:
+        condition: service_healthy
+    environment:
+      PROJECTS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@projects-db:5432/projects
+      PROJECTS_ALLOW_INTERNAL_URLS: ${PROJECTS_ALLOW_INTERNAL_URLS}
+      PROJECTS_GRPC_HOST: 0.0.0.0
+      PROJECTS_GRPC_PORT: 50052
+
+  runs:
+    build:
+      context: .
+      dockerfile: services/runs/Dockerfile
+    restart: on-failure
+    depends_on:
+      runs-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RUNS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@runs-db:5432/runs
+      RUNS_RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      RUNS_GRPC_HOST: 0.0.0.0
+      RUNS_GRPC_PORT: 50053
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    restart: on-failure
+    depends_on:
+      - auth
+      - projects
+      - runs
+    environment:
+      GATEWAY_AUTH_GRPC_ADDRESS: auth:50051
+      GATEWAY_PROJECTS_GRPC_ADDRESS: projects:50052
+      GATEWAY_RUNS_GRPC_ADDRESS: runs:50053
+      GATEWAY_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      GATEWAY_COOKIE_SECURE: ${GATEWAY_COOKIE_SECURE}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: ${JWT_AUDIENCE}
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  runner:
+    build:
+      context: .
+      dockerfile: services/runner/Dockerfile
+    restart: on-failure
+    depends_on:
+      - projects
+      - runs
+    environment:
+      RUNNER_RUNS_GRPC_ADDRESS: runs:50053
+      RUNNER_PROJECTS_GRPC_ADDRESS: projects:50052
+      RUNNER_RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      RUNNER_ALLOW_INTERNAL_URLS: ${RUNNER_ALLOW_INTERNAL_URLS}
+      RUNNER_POLL_INTERVAL_SECONDS: ${RUNNER_POLL_INTERVAL_SECONDS}
+      RUNNER_LLM_PROVIDER: ${RUNNER_LLM_PROVIDER}
+      RUNNER_GIGACHAT_CREDENTIALS: ${RUNNER_GIGACHAT_CREDENTIALS:-}
+      RUNNER_GIGACHAT_SCOPE: ${RUNNER_GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
+      RUNNER_GIGACHAT_CA_BUNDLE_FILE: /certs/russian_trusted_root_ca.cer
+      RUNNER_OPENROUTER_API_KEY: ${RUNNER_OPENROUTER_API_KEY:-}
+    volumes:
+      - ${GIGACHAT_CA_DIR:?укажите в .env GIGACHAT_CA_DIR — папку с сертификатом Минцифры}:/certs:ro
+
+  demo-shop:
+    build:
+      context: .
+      dockerfile: demo_shop/Dockerfile
+    ports:
+      - "127.0.0.1:8001:8001"
 
 volumes:
   auth-data:

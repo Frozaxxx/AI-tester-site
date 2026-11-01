@@ -67,6 +67,23 @@ alembic upgrade head
 alembic revision --autogenerate -m "что изменилось"
 ```
 
+## Запуск всего в Docker
+
+Все сервисы, базы, Redis, RabbitMQ и демо-магазин поднимаются одной командой:
+
+```
+cp .env.example .env   # заполни секреты
+docker compose up -d --build
+```
+
+Наружу открыты только gateway (http://localhost:8000/docs) и демо-магазин
+(http://localhost:8001), оба на 127.0.0.1. Остальные сервисы общаются по gRPC
+внутри сети Docker. Каждый контейнер получает только свои переменные, а не весь `.env`.
+Миграции накатываются сами при старте auth, projects и runs. Демо-магазин внутри сети
+доступен раннеру как `http://demo-shop:8001`, этот адрес и указывай в проекте.
+Для GigaChat в `.env` укажи `GIGACHAT_CA_DIR` — папку с сертификатом
+`russian_trusted_root_ca.cer`, она монтируется в раннер только на чтение.
+
 ## Авторизация: gateway + auth
 
 ```
