@@ -3,7 +3,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
-from app.application.agent import LlmAgent, to_action
+from app.application.agent import LlmAgent, refusal, to_action
 from app.domain.entities import Action, ActionResult, Element, Job, PageProblem, PageSnapshot
 from app.infra.browser import SiteBrowser
 
@@ -48,12 +48,15 @@ class Recorder:
         self.problems: list[PageProblem] = []
         self.used_tokens = 0
 
-    async def step(self, action: Action, result: ActionResult) -> None:
+    async def step(self, action: Action, result: ActionResult) -> list[str]:
         self.steps.append((action, result))
-        self.problems += self.browser.take_problems()
+        problems = self.browser.take_problems()
+        self.problems += problems
+        return [p.title for p in problems]
 
-    async def bug(self, problem: PageProblem) -> None:
+    async def bug(self, problem: PageProblem) -> bool:
         self.bugs.append(problem)
+        return True
 
     async def tokens(self, count: int) -> None:
         self.used_tokens += count
@@ -110,7 +113,7 @@ async def test_agent_walks_site_and_reports_bug(site_url: str) -> None:
 
 async def test_agent_stops_at_step_limit(site_url: str) -> None:
     """Агент, который никогда не заканчивает, останавливается по лимиту шагов."""
-    model = ScriptedModel(script=[("act", {"action": "wait", "value": "1"})] * 10)
+    model = ScriptedModel(script=[("act", {"action": "wait", "value": str(i)}) for i in range(10)])
     async with SiteBrowser(site_url, allow_internal=True) as browser:
         recorder = Recorder(browser)
         actions = await LlmAgent(model, max_steps=3).run(job_for(site_url), browser, recorder)
@@ -136,6 +139,35 @@ def test_wrong_element_number_becomes_failed_action() -> None:
     assert to_action({"action": "click", "element": 0}, snapshot).locator == "role=button"
     assert to_action({"action": "click", "element": 5}, snapshot).name == "unknown_element"
     assert to_action({"action": "click", "element": "0"}, snapshot).name == "unknown_element"
+
+
+def test_invented_urls_and_loops_are_refused() -> None:
+    """В свободном режиме нельзя выдумывать адреса и повторять одно действие на странице."""
+    job = job_for("http://site")
+    assert refusal(Action(name="goto", value="/about"), "u", job, {}) is not None
+    assert refusal(Action(name="goto", value="/"), "u", job, {}) is None
+    scenario = Job(run_id="r", owner_id="o", project_id="p", base_url="x", scenario_text="s")
+    assert refusal(Action(name="goto", value="/cart"), "u", scenario, {}) is None
+    repeats: dict = {}
+    click = Action(name="click", locator="role=link")
+    assert refusal(click, "/a", job, repeats) is None
+    assert refusal(click, "/a", job, repeats) is None
+    assert refusal(click, "/a", job, repeats) is not None
+    assert refusal(click, "/b", job, repeats) is None
+
+
+async def test_failed_actions_do_not_reach_test(site_url: str) -> None:
+    """Неудачное действие модель видит как ошибку, но в тест оно не попадает."""
+    model = ScriptedModel(
+        script=[
+            ("act", {"action": "click", "element": 999}),
+            ("act", {"action": "goto", "value": "/about"}),
+            ("finish", {"summary": "всё"}),
+        ]
+    )
+    async with SiteBrowser(site_url, allow_internal=True) as browser:
+        actions = await LlmAgent(model).run(job_for(site_url), browser, Recorder(browser))
+    assert [a.name for a in actions] == ["goto"]
 
 
 def job_for(site_url: str) -> Job:
