@@ -65,6 +65,9 @@ jobs:
         run: uv run playwright install --with-deps chromium
       - name: Тесты
         run: uv run pytest -q
+      - name: Синтаксис JavaScript интерфейса
+        if: matrix.service == 'gateway'
+        run: node --check app/static/app.js
 
   demo-shop:
     runs-on: ubuntu-latest

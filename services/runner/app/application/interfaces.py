@@ -64,3 +64,8 @@ class Agent(Protocol):
 
 
 BrowserFactory = Callable[[str], AbstractAsyncContextManager[Browser]]
+
+
+class Notifier(Protocol):
+    async def send(self, run_id: str, status: str) -> None:
+        """Сообщает оператору о завершении прогона."""

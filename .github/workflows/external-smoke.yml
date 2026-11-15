@@ -1,0 +1,28 @@
+name: External browser smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  external:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: uv run playwright install --with-deps chromium
+      - run: uv run python -m app.external_smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-browser-report
+          path: services/runner/artifacts/external/

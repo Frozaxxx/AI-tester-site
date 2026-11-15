@@ -12,6 +12,7 @@ from app.infra.browser import SiteBrowser
 from app.infra.clients.projects import ProjectsClient
 from app.infra.clients.runs import RunsClient
 from app.infra.llm import make_chat_model
+from app.infra.telegram import TelegramNotifier
 
 logger = logging.getLogger("runner")
 
@@ -30,7 +31,11 @@ async def work() -> None:
         model = make_chat_model(settings)
         agent = LlmAgent(model) if model is not None else None
         worker = RunWorker(
-            RunsClient(runs_channel), ProjectsClient(projects_channel), _browser, agent
+            RunsClient(runs_channel),
+            ProjectsClient(projects_channel),
+            _browser,
+            agent,
+            TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id),
         )
         loop = WorkLoop(worker, settings.poll_interval_seconds)
         broker = make_broker(settings.rabbitmq_url, loop)

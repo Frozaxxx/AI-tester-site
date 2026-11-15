@@ -1,11 +1,13 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from pathlib import Path
 
 import grpc
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from redis.asyncio import Redis
 
 from app.api.v1.auth import router as auth_router
@@ -40,6 +42,13 @@ app = FastAPI(title="AI-tester gateway", lifespan=lifespan)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(runs_router, prefix="/api/v1")
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.exception_handler(GatewayError)

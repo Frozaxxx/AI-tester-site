@@ -3,7 +3,7 @@ import logging
 
 from app.application.agent import SmokeAgent
 from app.application.codegen import generate_test
-from app.application.interfaces import Agent, Browser, BrowserFactory, Projects, Runs
+from app.application.interfaces import Agent, Browser, BrowserFactory, Notifier, Projects, Runs
 from app.domain.entities import Action, ActionResult, Job, PageProblem, ProblemKind
 from app.domain.exceptions import RunCancelledError
 
@@ -72,11 +72,13 @@ class RunWorker:
         projects: Projects,
         browser_factory: BrowserFactory,
         agent: Agent | None = None,
+        notifier: Notifier | None = None,
     ) -> None:
         self._runs = runs
         self._projects = projects
         self._browser_factory = browser_factory
         self._agent = agent or SmokeAgent()
+        self._notifier = notifier
 
     async def run_once(self) -> bool:
         """Берёт один прогон из очереди и выполняет его, а при пустой очереди возвращает False."""
@@ -90,12 +92,21 @@ class RunWorker:
                 actions = await self._execute(job)
             await self._runs.finish(run_id)
             await self._save_test(job, actions)
+            await self._notify(run_id, "completed")
         except RunCancelledError:
             logger.info("прогон %s отменён, останавливаемся", run_id)
         except Exception:
             logger.exception("прогон %s сломался", run_id)
             await self._crash(run_id)
+            await self._notify(run_id, "failed")
         return True
+
+    async def _notify(self, run_id: str, status: str) -> None:
+        if self._notifier is not None:
+            try:
+                await self._notifier.send(run_id, status)
+            except Exception:
+                logger.warning("Notification failed for run %s", run_id)
 
     async def _load_job(self, claimed) -> Job:
         """Собирает задание: адрес сайта из проекта и текст сценария, если он выбран."""

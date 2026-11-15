@@ -173,3 +173,25 @@ def test_navigation_problem() -> None:
     assert navigation_problem(goto, ActionResult(ok=True)) is None
     click = Action(name="click", locator="text=Купить")
     assert navigation_problem(click, ActionResult(ok=False, error="timeout")) is None
+
+
+@pytest.mark.parametrize("fail", [False, True])
+async def test_notification_follows_run_result(fail: bool) -> None:
+    from unittest.mock import AsyncMock
+
+    notifier = AsyncMock()
+    runs = FakeRuns()
+    await RunWorker(
+        runs, FakeProjects(), factory(FakeBrowser(fail=fail)), PlanAgent(), notifier
+    ).run_once()
+    notifier.send.assert_awaited_once_with("run-1", "failed" if fail else "completed")
+
+
+async def test_notification_failure_does_not_crash_completed_run() -> None:
+    from unittest.mock import AsyncMock
+
+    runs = FakeRuns()
+    notifier = AsyncMock()
+    notifier.send.side_effect = RuntimeError("Telegram unavailable")
+    await RunWorker(runs, FakeProjects(), factory(FakeBrowser()), PlanAgent(), notifier).run_once()
+    assert runs.finished == ["run-1"] and runs.crashed == []

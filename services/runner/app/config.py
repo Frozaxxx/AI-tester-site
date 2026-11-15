@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     allow_internal_urls: bool
     poll_interval_seconds: float
     llm_provider: Literal["gigachat", "openrouter", "none"] = "none"
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
     gigachat_credentials: str | None = None
     gigachat_scope: str = "GIGACHAT_API_PERS"
     gigachat_model: str = "GigaChat-2-Max"
