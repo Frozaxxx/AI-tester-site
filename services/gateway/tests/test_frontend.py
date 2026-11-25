@@ -2,8 +2,10 @@ async def test_dashboard_and_assets(client) -> None:
     response = await client.get("/")
     assert response.status_code == 200
     assert 'lang="ru"' in response.text
+    assert 'id="root"' in response.text
+    assert 'type="module"' in response.text
     assert "/static/app.js" in response.text
-    for path, content_type in (("app.js", "javascript"), ("style.css", "text/css")):
+    for path, content_type in (("app.js", "javascript"), ("app.css", "text/css")):
         asset = await client.get(f"/static/{path}")
         assert asset.status_code == 200
         assert content_type in asset.headers["content-type"]

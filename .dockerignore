@@ -8,3 +8,5 @@
 **/.ruff_cache
 **/tests
 **/uv.lock
+**/node_modules
+services/gateway/app/frontend_dist

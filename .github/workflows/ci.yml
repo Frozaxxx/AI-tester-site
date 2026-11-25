@@ -63,11 +63,20 @@ jobs:
       - name: Браузер для раннера
         if: matrix.service == 'runner'
         run: uv run playwright install --with-deps chromium
+      - uses: actions/setup-node@v4
+        if: matrix.service == 'gateway'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Сборка React и проверка TypeScript
+        if: matrix.service == 'gateway'
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
       - name: Тесты
         run: uv run pytest -q
-      - name: Синтаксис JavaScript интерфейса
-        if: matrix.service == 'gateway'
-        run: node --check app/static/app.js
 
   run-lease-recovery:
     runs-on: ubuntu-latest

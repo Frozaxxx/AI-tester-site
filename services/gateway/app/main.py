@@ -4,7 +4,7 @@ from http import HTTPStatus
 from pathlib import Path
 
 import grpc
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -42,13 +42,20 @@ app = FastAPI(title="AI-tester gateway", lifespan=lifespan)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(runs_router, prefix="/api/v1")
-STATIC_DIR = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+STATIC_DIR = Path(__file__).parent / "frontend_dist"
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
 async def dashboard() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    index = STATIC_DIR / "index.html"
+    if not index.is_file():
+        raise HTTPException(
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            detail="Соберите интерфейс командой npm --prefix frontend run build.",
+        )
+    return FileResponse(index)
 
 
 @app.exception_handler(GatewayError)
