@@ -9,6 +9,10 @@ NEEDS_LOCATOR = frozenset({"click", "fill", "select", "check"})
 NEEDS_VALUE = frozenset({"goto", "fill", "press", "select", "expect_text", "expect_url", "wait"})
 ACTIONS = NEEDS_LOCATOR | NEEDS_VALUE
 WAIT_MAX_MS = 5_000
+IGNORED_CONSOLE_ERROR_PREFIXES = (
+    "Failed to load resource",
+    "Permissions policy violation: unload is not allowed in this document.",
+)
 
 
 def validate_action(action: Action) -> None:

@@ -2,12 +2,13 @@ from urllib.parse import urljoin
 
 from app.domain.entities import Action, Job
 from app.domain.exceptions import ActionError
-from app.domain.services import validate_action
+from app.domain.services import IGNORED_CONSOLE_ERROR_PREFIXES, validate_action
 
 HEADER = '''from playwright.sync_api import Page, expect
 
 BASE_URL = {base_url}
 CHECKED_RESOURCES = {{"document", "xhr", "fetch", "script", "stylesheet", "image"}}
+IGNORED_CONSOLE_ERROR_PREFIXES = {ignored_console_errors!r}
 
 
 def test_run_{name}(page: Page) -> None:
@@ -17,7 +18,7 @@ def test_run_{name}(page: Page) -> None:
     page.on(
         "console",
         lambda message: message.type == "error"
-        and not message.text.startswith("Failed to load resource")
+        and not message.text.startswith(IGNORED_CONSOLE_ERROR_PREFIXES)
         and errors.append(f"console: {{message.text}}"),
     )
     page.on(
@@ -79,7 +80,11 @@ def _line(action: Action, base_url: str) -> str:
 def generate_test(job: Job, actions: list[Action]) -> str:
     """Собирает pytest-тест на Playwright, который повторяет шаги прогона и ловит ошибки страниц."""
     base_url = job.base_url.rstrip("/")
-    code = HEADER.format(base_url=repr(base_url), name=job.run_id.replace("-", "_")[:8])
+    code = HEADER.format(
+        base_url=repr(base_url),
+        name=job.run_id.replace("-", "_")[:8],
+        ignored_console_errors=IGNORED_CONSOLE_ERROR_PREFIXES,
+    )
     body = [f"    {_line(action, base_url)}" for action in actions if _is_valid(action)]
     body.append("    assert errors == [], errors")
     return code + "\n".join(body) + "\n"

@@ -45,13 +45,13 @@ def test_code_is_valid_python_with_safe_literals() -> None:
         Action(name="fill", locator="input[name=q]", value=evil),
         Action(name="press", value="Enter"),
         Action(name="expect_url", value="/search"),
-        Action(name="rm", value="-rf"),
+        Action(name="rm", value="disallowed-command"),
         Action(name="wait", value="100"),
     ]
     code = generate_test(make_job("https://shop.example.com/"), actions)
     compile(code, "test_generated.py", "exec")
     assert "BASE_URL = 'https://shop.example.com'" in code
-    assert repr(evil) in code and "rm" not in code.replace(repr(evil), "")
+    assert repr(evil) in code and "disallowed-command" not in code
     assert "page.keyboard.press('Enter')" in code
 
 
@@ -66,7 +66,13 @@ def test_generated_test_passes_on_clean_page(site_url: str, tmp_path: Path) -> N
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("path", ["/js-error", "/api-error", "/missing"])
+def test_generated_test_passes_with_unload_policy_diagnostic(site_url: str, tmp_path: Path) -> None:
+    actions = [Action(name="goto", value="/unload-policy")]
+    result = run_generated(generate_test(make_job(site_url), actions), tmp_path)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("path", ["/js-error", "/console-error", "/api-error", "/missing"])
 def test_generated_test_reproduces_bug(site_url: str, tmp_path: Path, path: str) -> None:
     """Тест падает на странице с ошибкой, то есть воспроизводит найденный баг."""
     actions = [Action(name="goto", value=path), Action(name="wait", value="300")]

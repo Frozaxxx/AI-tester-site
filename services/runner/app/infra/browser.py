@@ -27,6 +27,7 @@ from app.domain.entities import (
 )
 from app.domain.exceptions import ActionError
 from app.domain.services import (
+    IGNORED_CONSOLE_ERROR_PREFIXES,
     is_same_site,
     resolve_internal,
     same_site_url,
@@ -259,10 +260,10 @@ class SiteBrowser:
         )
 
     def _on_console(self, message: ConsoleMessage) -> None:
-        """Записывает ошибки из консоли браузера, кроме заблокированных нами запросов."""
+        """Записывает ошибки из консоли, исключая служебные сообщения браузера."""
         if message.type != "error" or "ERR_BLOCKED_BY_CLIENT" in message.text:
             return
-        if message.text.startswith("Failed to load resource"):
+        if message.text.startswith(IGNORED_CONSOLE_ERROR_PREFIXES):
             return
         self._add(
             ProblemKind.JS_ERROR,

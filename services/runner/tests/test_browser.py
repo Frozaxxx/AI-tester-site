@@ -58,6 +58,12 @@ async def test_problems_are_collected(site_url: str) -> None:
     assert kinds == {ProblemKind.JS_ERROR, ProblemKind.HTTP_ERROR}
 
 
+async def test_unload_policy_diagnostic_is_not_a_finding(site_url: str) -> None:
+    async with SiteBrowser(site_url, allow_internal=True) as browser:
+        assert (await browser.perform(Action(name="goto", value="/unload-policy"))).ok
+        assert browser.take_problems() == []
+
+
 async def test_internal_addresses_are_blocked(site_url: str) -> None:
     """Без разрешения браузер не открывает локальные адреса, а с чужого сайта не уходит."""
     async with SiteBrowser(site_url) as browser:

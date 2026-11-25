@@ -21,6 +21,8 @@ PAGES = {
 <script>throw new Error("Smoke page loaded")</script>""",
     "/console-error": """<!doctype html><meta charset="utf-8"><h1>Консоль</h1>
 <script>console.error("Не удалось загрузить корзину")</script>""",
+    "/unload-policy": """<!doctype html><meta charset="utf-8"><h1>Политика unload</h1>
+<script>window.addEventListener("unload", () => {});</script>""",
     "/api-error": """<!doctype html><meta charset="utf-8"><h1>API</h1>
 <script>fetch("/api/cart")</script>""",
     "/external-link": """<!doctype html><meta charset="utf-8">
@@ -50,6 +52,8 @@ class Handler(BaseHTTPRequestHandler):
         data = body.encode()
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        if self.path == "/unload-policy":
+            self.send_header("Permissions-Policy", "unload=()")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
