@@ -18,7 +18,7 @@ function downloadTest(runId: string, code: string) {
   const url = URL.createObjectURL(new Blob([code], { type: "text/x-python" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = `test_scout_${runId}.py`;
+  link.download = `test_ai_tester_${runId}.py`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

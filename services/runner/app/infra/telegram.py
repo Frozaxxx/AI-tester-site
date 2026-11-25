@@ -26,7 +26,7 @@ class TelegramNotifier:
         payload = json.dumps(
             {
                 "chat_id": self._chat_id,
-                "text": f"Scout: прогон {run_id}\nСтатус: {status}",
+                "text": f"AI Tester. Прогон {run_id}\nСтатус: {status}",
                 "link_preview_options": {"is_disabled": True},
             }
         ).encode()

@@ -1,19 +1,19 @@
 # Архитектура AI Tester
 
-Scout собирается из React и TypeScript. Gateway раздаёт HTML, CSS и JavaScript,
+Интерфейс AI Tester собран на React и TypeScript. Gateway раздаёт HTML, CSS и JavaScript,
 принимает запросы к `/api/v1` с того же адреса и передаёт их внутренним gRPC-сервисам.
 Сессия использует HTTP-only cookie. При истечении access-токена параллельные запросы
 ждут одного обновления сессии. Списки прогонов и открытый отчёт обновляются в видимой
 вкладке. При выборе другого проекта или прогона запросы предыдущего экрана отменяются.
 
-По ссылке Scout находит проект с таким URL или создаёт его, запускает проверку
+По ссылке AI Tester находит проект с таким URL или создаёт его, запускает проверку
 и открывает отчёт. Первое действие раннера открывает этот URL с путём и параметрами.
 
 ## Захват и освобождение прогона
 
 ```mermaid
 sequenceDiagram
-    participant UI as Scout
+    participant UI as AI Tester
     participant GW as Gateway
     participant Runs as Runs
     participant PG as PostgreSQL

@@ -49,7 +49,7 @@ function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
         <p>Запускайте браузерные сценарии, изучайте найденные ошибки и скачивайте Playwright-тесты.</p>
       </section>
       <section className="card narrow" aria-labelledby="sign-in">
-        <h2 id="sign-in">Вход в Scout</h2>
+        <h2 id="sign-in">Вход в AI Tester</h2>
         <form noValidate onSubmit={submit}>
           <fieldset disabled={action.busy}>
             <label>
@@ -100,7 +100,7 @@ function App() {
   return (
     <>
       <header>
-        <a className="brand" href="/">Scout</a>
+        <a className="brand" href="/">AI Tester</a>
         <nav aria-label="Навигация" className="actions">
           <a href="/docs">REST API</a>
           {user && (

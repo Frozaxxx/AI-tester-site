@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await app.state.redis.aclose()
 
 
-app = FastAPI(title="AI-tester gateway", lifespan=lifespan)
+app = FastAPI(title="AI Tester API", lifespan=lifespan)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(runs_router, prefix="/api/v1")
