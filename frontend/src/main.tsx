@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { api, sessionExpired, type User } from "./api";
 import { useAction } from "./resources";
@@ -8,7 +8,40 @@ import "./style.css";
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MIN_REGISTRATION_PASSWORD_LENGTH = 8;
 
-function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
+function AuthScreen({ onLogin }: { onLogin: (user: User) => void }) {
+  const [registering, setRegistering] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    heading.current?.focus();
+  }, [registering]);
+
+  return (
+    <>
+      <section className="intro">
+        <h1>Проверка сайтов</h1>
+        <p>Запускайте браузерные сценарии, изучайте найденные ошибки и скачивайте Playwright-тесты.</p>
+      </section>
+      <section className="card narrow" aria-labelledby="auth-heading">
+        <h2 id="auth-heading" ref={heading} tabIndex={-1}>
+          {registering ? "Регистрация в AI Tester" : "Вход в AI Tester"}
+        </h2>
+        <CredentialsForm
+          key={registering ? "register" : "login"}
+          registering={registering}
+          onSwitch={() => setRegistering(!registering)}
+          onLogin={onLogin}
+        />
+      </section>
+    </>
+  );
+}
+
+function CredentialsForm({ registering, onSwitch, onLogin }: {
+  registering: boolean;
+  onSwitch: () => void;
+  onLogin: (user: User) => void;
+}) {
   const action = useAction();
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -21,8 +54,6 @@ function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
       email: String(values.get("email") ?? "").trim(),
       password: String(values.get("password") ?? ""),
     };
-    const submitter = (event.nativeEvent as SubmitEvent).submitter;
-    const registering = submitter?.getAttribute("name") === "register";
     const invalidEmail = !EMAIL_PATTERN.test(credentials.email);
     const invalidPassword = !credentials.password
       ? "Введите пароль."
@@ -44,37 +75,38 @@ function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
 
   return (
     <>
-      <section className="intro">
-        <h1>Проверка сайтов</h1>
-        <p>Запускайте браузерные сценарии, изучайте найденные ошибки и скачивайте Playwright-тесты.</p>
-      </section>
-      <section className="card narrow" aria-labelledby="sign-in">
-        <h2 id="sign-in">Вход в AI Tester</h2>
-        <form noValidate onSubmit={submit}>
-          <fieldset disabled={action.busy}>
-            <label>
-              Email
-              <input name="email" type="email" autoComplete="email" required maxLength={254}
-                aria-invalid={Boolean(emailError)} aria-describedby={emailError ? "email-error" : undefined}
-                onChange={() => setEmailError("")} />
-            </label>
-            {emailError && <p id="email-error" role="alert" className="field-error">{emailError}</p>}
-            <label>
-              Пароль
-              <input name="password" type="password" autoComplete="current-password" required maxLength={128}
-                aria-invalid={Boolean(passwordError)} aria-describedby={passwordError ? "password-error" : undefined}
-                onChange={() => setPasswordError("")} />
-            </label>
-            {passwordError && <p id="password-error" role="alert" className="field-error">{passwordError}</p>}
-            <div className="actions">
-              <button type="submit" className="primary">Войти</button>
-              <button type="submit" name="register">Создать аккаунт</button>
-            </div>
-          </fieldset>
-        </form>
-        {action.busy && <p role="status" className="muted">Отправляем запрос…</p>}
-        {action.error && !emailError && !passwordError && <p role="alert" className="error">{action.error}</p>}
-      </section>
+      <form noValidate onSubmit={submit}>
+        <fieldset disabled={action.busy}>
+          <label>
+            Email
+            <input name="email" type="email" autoComplete="email" required maxLength={254}
+              aria-invalid={Boolean(emailError)} aria-describedby={emailError ? "email-error" : undefined}
+              onChange={() => setEmailError("")} />
+          </label>
+          {emailError && <p id="email-error" role="alert" className="field-error">{emailError}</p>}
+          <label>
+            Пароль
+            <input name="password" type="password"
+              autoComplete={registering ? "new-password" : "current-password"} required maxLength={128}
+              aria-invalid={Boolean(passwordError)}
+              aria-describedby={passwordError ? "password-error" : registering ? "password-hint" : undefined}
+              onChange={() => setPasswordError("")} />
+          </label>
+          {passwordError ? (
+            <p id="password-error" role="alert" className="field-error">{passwordError}</p>
+          ) : registering && (
+            <p id="password-hint" className="muted small">Минимум 8 символов.</p>
+          )}
+          <div className="actions">
+            <button type="submit" className="primary">{registering ? "Зарегистрироваться" : "Войти"}</button>
+            <button type="button" onClick={onSwitch}>
+              {registering ? "Вернуться ко входу" : "Создать аккаунт"}
+            </button>
+          </div>
+        </fieldset>
+      </form>
+      {action.busy && <p role="status" className="muted">Отправляем запрос…</p>}
+      {action.error && !emailError && !passwordError && <p role="alert" className="error">{action.error}</p>}
     </>
   );
 }
@@ -124,7 +156,7 @@ function App() {
         ) : (
           <>
             {expired && <p className="error" role="status">Сессия истекла. Войдите снова.</p>}
-            <SignIn onLogin={next => { setExpired(false); setUser(next); }} />
+            <AuthScreen onLogin={next => { setExpired(false); setUser(next); }} />
           </>
         )}
       </main>
