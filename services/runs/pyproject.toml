@@ -10,6 +10,7 @@ dependencies = [
     "grpcio>=1.84",
     "protobuf>=7.35",
     "faststream[rabbit]>=0.7",
+    "redis>=5.0",
 ]
 
 [dependency-groups]

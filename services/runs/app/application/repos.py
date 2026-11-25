@@ -27,6 +27,9 @@ class RunRepository(Protocol):
     async def list_stale(self, started_before: datetime) -> list[Run]:
         """Находит прогоны, которые идут дольше допустимого, и блокирует их для обновления."""
 
+    async def lock_by_ids(self, run_ids: list[uuid.UUID]) -> list[Run]:
+        """Блокирует прогоны по первичному ключу в стабильном порядке."""
+
 
 class StepRepository(Protocol):
     async def add(self, step: Step) -> None:

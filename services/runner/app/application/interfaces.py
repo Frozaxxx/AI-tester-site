@@ -9,6 +9,9 @@ class Runs(Protocol):
     async def claim(self):
         """Берёт следующий прогон из очереди или возвращает None."""
 
+    async def heartbeat(self, run_id: str) -> None:
+        """Продлевает аренду, пока раннер выполняет прогон."""
+
     async def add_step(self, run_id: str, index: int, action: Action, result: ActionResult) -> None:
         """Записывает выполненное действие агента в прогон."""
 

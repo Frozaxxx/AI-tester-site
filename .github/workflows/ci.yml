@@ -69,6 +69,35 @@ jobs:
         if: matrix.service == 'gateway'
         run: node --check app/static/app.js
 
+  run-lease-recovery:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/runs
+    env:
+      TEST_RUNS_DATABASE_URL: postgresql+asyncpg://ci:ci@127.0.0.1:5432/runs
+      TEST_RUNS_REDIS_URL: redis://127.0.0.1:6379/0
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: runs
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U ci -d runs" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: uv run pytest -q tests/test_lease_recovery.py
+
   demo-shop:
     runs-on: ubuntu-latest
     steps:

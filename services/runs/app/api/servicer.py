@@ -5,10 +5,12 @@ from functools import wraps
 from http import HTTPStatus
 
 import grpc
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.application.dtos import RunDetails
 from app.application.events import RunEvents
+from app.application.leases import RunLeases
 from app.application.services import RunService
 from app.domain.entities import Finding, GeneratedTest, Run, Step
 from app.domain.exceptions import DomainError
@@ -36,6 +38,8 @@ def handle_errors[**P, R](method: Callable[P, Awaitable[R]]) -> Callable[P, Awai
         context: grpc.aio.ServicerContext = args[2]  # type: ignore[assignment]
         try:
             return await method(*args, **kwargs)
+        except RedisError:
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "Хранилище аренд недоступно")
         except DomainError as exc:
             code = GRPC_STATUS.get(HTTPStatus(exc.status_code), grpc.StatusCode.INVALID_ARGUMENT)
             await context.abort(
@@ -114,10 +118,14 @@ def _optional(request, field: str) -> str | None:
 
 class RunsServicer(runs_pb2_grpc.RunsServiceServicer):
     def __init__(
-        self, session_factory: async_sessionmaker, events: RunEvents | None = None
+        self,
+        session_factory: async_sessionmaker,
+        events: RunEvents | None = None,
+        leases: RunLeases | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._events = events
+        self._leases = leases
 
     @asynccontextmanager
     async def _service(self) -> AsyncIterator[RunService]:
@@ -130,6 +138,7 @@ class RunsServicer(runs_pb2_grpc.RunsServiceServicer):
                 finding_repo=SqlFindingRepository(session),
                 test_repo=SqlGeneratedTestRepository(session),
                 events=self._events,
+                leases=self._leases,
             )
 
     @handle_errors
@@ -170,6 +179,13 @@ class RunsServicer(runs_pb2_grpc.RunsServiceServicer):
         if run is None:
             return runs_pb2.ClaimedRun()
         return runs_pb2.ClaimedRun(run=_run(run), owner_id=str(run.owner_id))
+
+    @handle_errors
+    async def HeartbeatRun(self, request, context):
+        # Opening an AsyncSession does not acquire a PostgreSQL connection here.
+        async with self._service() as service:
+            await service.heartbeat(request.run_id)
+        return runs_pb2.Empty()
 
     @handle_errors
     async def StartRun(self, request, context):

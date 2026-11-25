@@ -14,6 +14,7 @@ service RunsService {
   rpc CancelRun(RunRequest) returns (Run);
 
   rpc ClaimRun(Empty) returns (ClaimedRun);
+  rpc HeartbeatRun(RunnerRequest) returns (Empty);
   rpc StartRun(RunnerRequest) returns (Run);
   rpc AddStep(AddStepRequest) returns (Step);
   rpc AddFinding(AddFindingRequest) returns (Finding);

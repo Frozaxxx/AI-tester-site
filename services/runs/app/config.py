@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     grpc_host: str
     grpc_port: int
     rabbitmq_url: str
+    redis_url: str
 
 
 settings = Settings()

@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 import pytest
@@ -23,6 +24,9 @@ class FakeRuns:
 
     async def claim(self):
         return self.queue.pop(0) if self.queue else None
+
+    async def heartbeat(self, run_id: str) -> None:
+        pass
 
     async def add_step(self, run_id: str, index: int, action: Action, result: ActionResult) -> None:
         if index == self.cancel_on_step:
@@ -137,6 +141,36 @@ async def test_cancelled_run_stops_without_crash() -> None:
     runs = FakeRuns(cancel_on_step=1)
     await RunWorker(runs, FakeProjects(), factory(FakeBrowser()), PlanAgent()).run_once()
     assert runs.steps == [(0, "goto", True)]
+    assert runs.finished == [] and runs.crashed == [] and runs.tests == []
+
+
+async def test_lost_lease_stops_agent_and_closes_browser(monkeypatch) -> None:
+    agent_started = asyncio.Event()
+    browser_closed = asyncio.Event()
+
+    class ExpiredRun(FakeRuns):
+        async def heartbeat(self, run_id: str) -> None:
+            await agent_started.wait()
+            raise RunCancelledError
+
+    class WaitingAgent:
+        async def run(self, job, browser, recorder):
+            agent_started.set()
+            await asyncio.Future()
+
+    @asynccontextmanager
+    async def tracked_browser(base_url):
+        try:
+            yield FakeBrowser()
+        finally:
+            browser_closed.set()
+
+    monkeypatch.setattr("app.application.worker.HEARTBEAT_INTERVAL_SECONDS", 0)
+    runs = ExpiredRun()
+    worker = RunWorker(runs, FakeProjects(), tracked_browser, WaitingAgent())
+
+    assert await asyncio.wait_for(worker.run_once(), timeout=1)
+    assert browser_closed.is_set()
     assert runs.finished == [] and runs.crashed == [] and runs.tests == []
 
 

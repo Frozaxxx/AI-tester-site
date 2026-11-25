@@ -6,14 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.dtos import RunDetails
 from app.application.events import RunEvents
+from app.application.leases import RunLeases
 from app.application.repos import (
     FindingRepository,
     GeneratedTestRepository,
     RunRepository,
     StepRepository,
 )
-from app.domain.entities import Finding, GeneratedTest, Run, Step, now
-from app.domain.exceptions import RunNotFoundError, ValidationError
+from app.domain.entities import Finding, GeneratedTest, Run, RunStatus, Step, now
+from app.domain.exceptions import InvalidRunStateError, RunNotFoundError, ValidationError
 from app.domain.services import (
     add_tokens,
     cancel_run,
@@ -23,6 +24,7 @@ from app.domain.services import (
     create_run,
     create_step,
     ensure_owner,
+    ensure_running,
     finish_run,
     parse_finding_kind,
     start_run,
@@ -42,6 +44,7 @@ class RunService:
         finding_repo: FindingRepository,
         test_repo: GeneratedTestRepository,
         events: RunEvents | None = None,
+        leases: RunLeases | None = None,
     ) -> None:
         self._session = session
         self._run_repo = run_repo
@@ -49,6 +52,7 @@ class RunService:
         self._finding_repo = finding_repo
         self._test_repo = test_repo
         self._events = events
+        self._leases = leases
 
     async def create_run(
         self, owner_id: str, project_id: str, scenario_id: str | None = None
@@ -94,16 +98,44 @@ class RunService:
     async def cancel_run(self, owner_id: str, run_id: str) -> Run:
         """Отменяет незавершённый прогон пользователя."""
         run = await self._own_run(owner_id, run_id, for_update=True)
+        was_running = run.status == RunStatus.RUNNING
         cancel_run(run, now())
-        return await self._save(run)
+        await self._save(run)
+        if was_running:
+            await self._release(run.id)
+        return run
 
     async def claim_run(self) -> Run | None:
         """Отдаёт раннеру самый старый прогон из очереди и сразу переводит его в работу."""
         run = await self._run_repo.claim_next()
         if run is None:
             return None
-        start_run(run, now())
-        return await self._save(run)
+        return await self._start(run)
+
+    async def heartbeat(self, run_id: str) -> None:
+        run_uuid = _parse_id(run_id, RunNotFoundError)
+        if self._leases is None or not await self._leases.renew(run_uuid):
+            raise InvalidRunStateError("Аренда прогона завершилась")
+
+    async def expire_leases(self) -> int:
+        if self._leases is None or not (run_ids := await self._leases.expired()):
+            return 0
+        finished = set(run_ids)
+        count = 0
+        for run in await self._run_repo.lock_by_ids(run_ids):
+            if await self._leases.active(run.id):
+                finished.remove(run.id)
+            elif run.status == RunStatus.QUEUED:
+                # A rolled-back claim left an orphan. Remove it while holding the row lock.
+                await self._leases.remove(run.id)
+                finished.remove(run.id)
+            elif run.status == RunStatus.RUNNING:
+                crash_run(run, now())
+                await self._run_repo.save(run)
+                count += 1
+        await self._session.commit()
+        await self._release(*finished)
+        return count
 
     async def expire_stale_runs(self) -> int:
         """Переводит в ошибку прогоны, которые зависли в работе, например из-за упавшего раннера."""
@@ -112,13 +144,21 @@ class RunService:
             crash_run(run, now())
             await self._run_repo.save(run)
         await self._session.commit()
+        await self._release(*(run.id for run in stale))
         return len(stale)
 
     async def start_run(self, run_id: str) -> Run:
         """Отмечает, что раннер взял прогон в работу."""
         run = await self._locked_run(run_id)
+        return await self._start(run)
+
+    async def _start(self, run: Run) -> Run:
         start_run(run, now())
-        return await self._save(run)
+        await self._run_repo.save(run)
+        if self._leases is not None:
+            await self._leases.start(run.id)
+        await self._session.commit()
+        return run
 
     async def add_step(
         self,
@@ -131,7 +171,7 @@ class RunService:
         error: str | None = None,
     ) -> Step:
         """Записывает действие агента в идущий прогон."""
-        run = await self._locked_run(run_id)
+        run = await self._leased_run(run_id)
         step = create_step(run, index, action, ok, locator, value, error)
         await self._step_repo.add(step)
         await self._session.commit()
@@ -147,7 +187,7 @@ class RunService:
     ) -> Finding:
         """Записывает найденный баг в идущий прогон."""
         finding_kind = parse_finding_kind(kind)
-        run = await self._locked_run(run_id)
+        run = await self._leased_run(run_id)
         finding = create_finding(run, finding_kind, title, details, step_index)
         await self._finding_repo.add(finding)
         await self._session.commit()
@@ -155,22 +195,22 @@ class RunService:
 
     async def add_tokens(self, run_id: str, count: int) -> Run:
         """Прибавляет к прогону потраченные токены LLM."""
-        run = await self._locked_run(run_id)
+        run = await self._leased_run(run_id)
         add_tokens(run, count)
         return await self._save(run)
 
     async def finish_run(self, run_id: str) -> Run:
         """Завершает прогон: если в нём записаны баги, он упал, иначе прошёл."""
-        run = await self._locked_run(run_id)
+        run = await self._leased_run(run_id)
         found_bugs = bool(await self._finding_repo.list_by_run(run.id))
         finish_run(run, found_bugs, now())
-        return await self._save(run)
+        return await self._save_terminal(run)
 
     async def crash_run(self, run_id: str) -> Run:
         """Отмечает, что прогон сломался сам, а не из-за сайта."""
         run = await self._locked_run(run_id)
         crash_run(run, now())
-        return await self._save(run)
+        return await self._save_terminal(run)
 
     async def save_generated_test(self, run_id: str, code: str) -> GeneratedTest:
         """Сохраняет Playwright-тест, собранный из шагов завершённого прогона."""
@@ -194,6 +234,25 @@ class RunService:
         if run is None:
             raise RunNotFoundError
         return run
+
+    async def _leased_run(self, run_id: str) -> Run:
+        run = await self._locked_run(run_id)
+        ensure_running(run)
+        if self._leases is not None and not await self._leases.active(run.id):
+            raise InvalidRunStateError("Аренда прогона завершилась")
+        return run
+
+    async def _save_terminal(self, run: Run) -> Run:
+        await self._save(run)
+        await self._release(run.id)
+        return run
+
+    async def _release(self, *run_ids: uuid.UUID) -> None:
+        if self._leases is not None and run_ids:
+            try:
+                await self._leases.remove(*run_ids)
+            except Exception:
+                logger.exception("Не удалось удалить аренды завершённых прогонов")
 
     async def _save(self, run: Run) -> Run:
         """Сохраняет прогон и фиксирует транзакцию."""

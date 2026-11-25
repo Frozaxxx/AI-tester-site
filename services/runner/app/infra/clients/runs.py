@@ -17,6 +17,11 @@ class RunsClient:
         claimed = await self._stub.ClaimRun(pb.Empty(), timeout=TIMEOUT_SECONDS)
         return claimed if claimed.HasField("run") else None
 
+    async def heartbeat(self, run_id: str) -> None:
+        await self._call(
+            self._stub.HeartbeatRun(pb.RunnerRequest(run_id=run_id), timeout=TIMEOUT_SECONDS)
+        )
+
     async def add_step(self, run_id: str, index: int, action, result: ActionResult) -> None:
         """Записывает выполненное действие агента в прогон."""
         request = pb.AddStepRequest(

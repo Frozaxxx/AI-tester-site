@@ -75,3 +75,9 @@ class SqlRunRepository:
             .with_for_update(skip_locked=True)
         )
         return [RunMapper.from_model(model) for model in result]
+
+    async def lock_by_ids(self, run_ids: list[uuid.UUID]) -> list[Run]:
+        result = await self._session.scalars(
+            select(RunOrm).where(RunOrm.id.in_(run_ids)).order_by(RunOrm.id).with_for_update()
+        )
+        return [RunMapper.from_model(model) for model in result]

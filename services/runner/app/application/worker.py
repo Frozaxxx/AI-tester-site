@@ -8,6 +8,7 @@ from app.domain.entities import Action, ActionResult, Job, PageProblem, ProblemK
 from app.domain.exceptions import RunCancelledError
 
 RUN_TIMEOUT_SECONDS = 600
+HEARTBEAT_INTERVAL_SECONDS = 10
 BLOCKED_MARKERS = ("ERR_BLOCKED_BY_CLIENT", "заблокирован")
 
 logger = logging.getLogger("runner")
@@ -88,8 +89,7 @@ class RunWorker:
         run_id = claimed.run.id
         try:
             async with asyncio.timeout(RUN_TIMEOUT_SECONDS):
-                job = await self._load_job(claimed)
-                actions = await self._execute(job)
+                job, actions = await self._run_with_heartbeat(claimed)
             await self._runs.finish(run_id)
             await self._save_test(job, actions)
             await self._notify(run_id, "completed")
@@ -100,6 +100,28 @@ class RunWorker:
             await self._crash(run_id)
             await self._notify(run_id, "failed")
         return True
+
+    async def _run_with_heartbeat(self, claimed) -> tuple[Job, list[Action]]:
+        task = asyncio.create_task(self._perform_run(claimed))
+        heartbeat = asyncio.create_task(self._heartbeat(claimed.run.id))
+        try:
+            done, _ = await asyncio.wait((task, heartbeat), return_when=asyncio.FIRST_COMPLETED)
+            if heartbeat in done:
+                heartbeat.result()
+            return task.result()
+        finally:
+            for pending in (task, heartbeat):
+                pending.cancel()
+            await asyncio.gather(task, heartbeat, return_exceptions=True)
+
+    async def _perform_run(self, claimed) -> tuple[Job, list[Action]]:
+        job = await self._load_job(claimed)
+        return job, await self._execute(job)
+
+    async def _heartbeat(self, run_id: str) -> None:
+        while True:
+            await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+            await self._runs.heartbeat(run_id)
 
     async def _notify(self, run_id: str, status: str) -> None:
         if self._notifier is not None:
