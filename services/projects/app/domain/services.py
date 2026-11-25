@@ -46,7 +46,7 @@ def _is_internal_host(host: str) -> bool:
 
 def normalize_base_url(raw: str, allow_internal: bool = False) -> str:
     """Проверяет, что адрес сайта корректный, публичный и без логина с паролем."""
-    url = raw.strip().rstrip("/")
+    url = raw.strip()
     if len(url) > URL_MAX_LENGTH:
         raise ValidationError(f"Адрес сайта должен быть не длиннее {URL_MAX_LENGTH} символов")
     if URL_FORBIDDEN_RE.search(url):
@@ -63,6 +63,8 @@ def normalize_base_url(raw: str, allow_internal: bool = False) -> str:
         raise ValidationError("Адрес сайта не должен содержать логин и пароль")
     if not allow_internal and _is_internal_host(host):
         raise ValidationError("Нельзя тестировать локальные и внутренние адреса")
+    if parts.path == "/" and not parts.query and not parts.fragment and url.endswith("/"):
+        return url[:-1]
     return url
 
 

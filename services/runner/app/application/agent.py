@@ -181,7 +181,7 @@ class LlmAgent:
         graph.add_edge(START, "decide")
         graph.add_conditional_edges("decide", after_decide)
         graph.add_conditional_edges("execute", after_execute)
-        start = Action(name="goto", value="/")
+        start = Action(name="goto", value=job.base_url)
         result = await browser.perform(start)
         await recorder.step(start, result)
         actions.append(start)
@@ -208,7 +208,7 @@ class LlmAgent:
 
 class SmokeAgent:
     async def run(self, job: Job, browser: Browser, recorder: Recorder) -> list[Action]:
-        """Простой режим без LLM: открыть главную страницу и собрать ошибки."""
-        action = Action(name="goto", value="/")
+        """Открывает указанный адрес и собирает ошибки страницы."""
+        action = Action(name="goto", value=job.base_url)
         await recorder.step(action, await browser.perform(action))
         return [action]

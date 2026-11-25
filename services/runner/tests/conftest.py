@@ -17,6 +17,8 @@ PAGES = {
 <a href="/missing">Сломанная ссылка</a>""",
     "/js-error": """<!doctype html><meta charset="utf-8"><h1>JS</h1>
 <script>undefinedFunction()</script>""",
+    "/page/?path=/": """<!doctype html><meta charset="utf-8"><title>Проверка URL</title>
+<script>throw new Error("Smoke page loaded")</script>""",
     "/console-error": """<!doctype html><meta charset="utf-8"><h1>Консоль</h1>
 <script>console.error("Не удалось загрузить корзину")</script>""",
     "/api-error": """<!doctype html><meta charset="utf-8"><h1>API</h1>

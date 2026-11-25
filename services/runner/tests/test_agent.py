@@ -1,10 +1,19 @@
+import pytest
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
-from app.application.agent import LlmAgent, refusal, to_action
-from app.domain.entities import Action, ActionResult, Element, Job, PageProblem, PageSnapshot
+from app.application.agent import LlmAgent, SmokeAgent, refusal, to_action
+from app.domain.entities import (
+    Action,
+    ActionResult,
+    Element,
+    Job,
+    PageProblem,
+    PageSnapshot,
+    ProblemKind,
+)
 from app.infra.browser import SiteBrowser
 
 
@@ -168,6 +177,21 @@ async def test_failed_actions_do_not_reach_test(site_url: str) -> None:
     async with SiteBrowser(site_url, allow_internal=True) as browser:
         actions = await LlmAgent(model).run(job_for(site_url), browser, Recorder(browser))
     assert [a.name for a in actions] == ["goto"]
+
+
+@pytest.mark.parametrize("llm", [False, True])
+async def test_agent_opens_requested_path_and_query(site_url: str, llm: bool) -> None:
+    url = f"{site_url}/page/?path=/"
+    agent = LlmAgent(ScriptedModel(script=[None])) if llm else SmokeAgent()
+    async with SiteBrowser(url, allow_internal=True) as browser:
+        recorder = Recorder(browser)
+        actions = await agent.run(job_for(url), browser, recorder)
+    assert actions == [Action(name="goto", value=url)]
+    assert recorder.steps[0][1].ok
+    assert any(
+        problem.kind == ProblemKind.JS_ERROR and "Smoke page loaded" in problem.title
+        for problem in recorder.problems
+    )
 
 
 def job_for(site_url: str) -> Job:

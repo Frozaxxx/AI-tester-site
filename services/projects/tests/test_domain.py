@@ -101,6 +101,12 @@ def test_internal_url_is_allowed_when_enabled() -> None:
     )
 
 
+@pytest.mark.parametrize("suffix", ["/catalog/", "/catalog?path=/"])
+def test_project_url_keeps_page_path_and_query(suffix: str) -> None:
+    url = f"https://shop.example.com{suffix}"
+    assert normalize_base_url(url) == url
+
+
 @pytest.mark.parametrize("name", ["a\x00b", "a\nb", "a\x1bb"])
 def test_control_chars_in_name_are_rejected(name: str) -> None:
     """Служебные символы в названии не принимаются, иначе база упадёт на нулевом байте."""

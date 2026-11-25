@@ -5,7 +5,10 @@ WORKDIR /srv/services/runner
 
 COPY services/runner/pyproject.toml .
 RUN python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']))" > requirements.txt \
-    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r requirements.txt
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libatomic1 \
     && playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 
