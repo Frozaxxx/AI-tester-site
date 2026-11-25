@@ -6,6 +6,7 @@ dist/
 .venv/
 node_modules/
 /services/gateway/app/frontend_dist/
+/certs/
 
 # Инструменты
 .pytest_cache/

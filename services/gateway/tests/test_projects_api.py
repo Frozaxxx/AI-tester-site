@@ -4,7 +4,7 @@ from httpx import AsyncClient
 
 from tests.conftest import make_access_token
 
-PROJECT = {"name": "Демо-магазин", "base_url": "http://127.0.0.1:8001"}
+PROJECT = {"name": "Тестовый сайт", "base_url": "https://example.com/catalog"}
 
 
 def login_as(client: AsyncClient, user_id: str) -> None:

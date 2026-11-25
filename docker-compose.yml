@@ -169,14 +169,7 @@ services:
       RUNNER_TELEGRAM_BOT_TOKEN: ${RUNNER_TELEGRAM_BOT_TOKEN:-}
       RUNNER_TELEGRAM_CHAT_ID: ${RUNNER_TELEGRAM_CHAT_ID:-}
     volumes:
-      - ${GIGACHAT_CA_DIR:?укажите в .env GIGACHAT_CA_DIR — папку с сертификатом Минцифры}:/certs:ro
-
-  demo-shop:
-    build:
-      context: .
-      dockerfile: demo_shop/Dockerfile
-    ports:
-      - "127.0.0.1:8001:8001"
+      - ${GIGACHAT_CA_DIR:-./certs}:/certs:ro
 
 volumes:
   auth-data:
