@@ -104,6 +104,8 @@ li { padding-block: 5px; }
 summary { cursor: pointer; color: #c8d5e8; }
 pre { overflow: auto; max-height: 420px; padding: 14px; background: #0d131d; border-radius: 8px; }
 .error { padding: 10px 12px; border-radius: 8px; border: 1px solid #99674e; color: #ffceaf; background: #32231e; }
+.field-error { color: #ffceaf; font-size: 0.86rem; margin: -4px 0 12px; }
+input[aria-invalid="true"] { border-color: #e89b75; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 @media (max-width: 760px) {

@@ -5,19 +5,39 @@ import { useAction } from "./resources";
 import { Workspace } from "./workspace";
 import "./style.css";
 
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const MIN_REGISTRATION_PASSWORD_LENGTH = 8;
+
 function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
   const action = useAction();
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const values = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const values = new FormData(form);
     const credentials = {
-      email: String(values.get("email")),
-      password: String(values.get("password")),
+      email: String(values.get("email") ?? "").trim(),
+      password: String(values.get("password") ?? ""),
     };
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const registering = submitter?.getAttribute("name") === "register";
+    const invalidEmail = !EMAIL_PATTERN.test(credentials.email);
+    const invalidPassword = !credentials.password
+      ? "Введите пароль."
+      : registering && credentials.password.length < MIN_REGISTRATION_PASSWORD_LENGTH
+        ? "Для регистрации нужен пароль от 8 символов."
+        : "";
+    setEmailError(invalidEmail ? "Введите email в формате name@example.com." : "");
+    setPasswordError(invalidPassword);
+    if (invalidEmail || invalidPassword) {
+      form.querySelector<HTMLInputElement>(invalidEmail ? "[name=email]" : "[name=password]")?.focus();
+      return;
+    }
+
     void action.run(async () => {
-      if (submitter?.getAttribute("name") === "register") await api.register(credentials);
+      if (registering) await api.register(credentials);
       onLogin(await api.login(credentials));
     });
   }
@@ -30,17 +50,30 @@ function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
       </section>
       <section className="card narrow" aria-labelledby="sign-in">
         <h2 id="sign-in">Вход в Scout</h2>
-        <form onSubmit={submit}>
+        <form noValidate onSubmit={submit}>
           <fieldset disabled={action.busy}>
-            <label>Email<input name="email" type="email" autoComplete="email" required maxLength={254} /></label>
-            <label>Пароль<input name="password" type="password" autoComplete="current-password" required minLength={8} maxLength={128} /></label>
+            <label>
+              Email
+              <input name="email" type="email" autoComplete="email" required maxLength={254}
+                aria-invalid={Boolean(emailError)} aria-describedby={emailError ? "email-error" : undefined}
+                onChange={() => setEmailError("")} />
+            </label>
+            {emailError && <p id="email-error" role="alert" className="field-error">{emailError}</p>}
+            <label>
+              Пароль
+              <input name="password" type="password" autoComplete="current-password" required maxLength={128}
+                aria-invalid={Boolean(passwordError)} aria-describedby={passwordError ? "password-error" : undefined}
+                onChange={() => setPasswordError("")} />
+            </label>
+            {passwordError && <p id="password-error" role="alert" className="field-error">{passwordError}</p>}
             <div className="actions">
               <button type="submit" className="primary">Войти</button>
               <button type="submit" name="register">Создать аккаунт</button>
             </div>
           </fieldset>
         </form>
-        {action.error && <p role="alert" className="error">{action.error}</p>}
+        {action.busy && <p role="status" className="muted">Отправляем запрос…</p>}
+        {action.error && !emailError && !passwordError && <p role="alert" className="error">{action.error}</p>}
       </section>
     </>
   );
