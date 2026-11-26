@@ -41,6 +41,7 @@ export interface RunDetails {
     locator: string | null;
     value: string | null;
     error: string | null;
+    has_screenshot: boolean;
   }[];
   test: { code: string; verified: boolean } | null;
 }

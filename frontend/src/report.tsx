@@ -72,6 +72,13 @@ export function RunReport({ runId, pollMs, onChange }: {
                 <li key={step.index}>
                   {step.ok ? "Успешно" : "Ошибка"} · {step.action} {step.locator} {step.value}
                   {step.error && <div>{step.error}</div>}
+                {step.has_screenshot && (
+                  <div>
+                    <a href={`/api/v1${path}/screenshots/${step.index}`} target="_blank" rel="noopener">
+                      Открыть скриншот шага {step.index + 1}
+                    </a>
+                  </div>
+                )}
                 </li>
               ))}
             </ol>

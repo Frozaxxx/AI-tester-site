@@ -1,10 +1,15 @@
-from fastapi import APIRouter, status
+import logging
+
+from botocore.exceptions import BotoCoreError, ClientError
+from fastapi import APIRouter, Path, Response, status
 
 from app.dependencies import CurrentUserId, ProjectsClientDep, RunsClientDep
 from app.exceptions import GatewayError
 from app.schemas import RunCreate, RunDetailsResponse, RunResponse
+from app.screenshots import screenshot_store
 
 router = APIRouter(tags=["Прогоны"])
+logger = logging.getLogger(__name__)
 
 
 async def _ensure_scenario(
@@ -49,7 +54,45 @@ async def list_runs(
 @router.get("/runs/{run_id}", summary="Прогон с результатами")
 async def get_run(run_id: str, user_id: CurrentUserId, runs: RunsClientDep) -> RunDetailsResponse:
     """Возвращает прогон со всеми шагами, багами и сгенерированным тестом."""
-    return RunDetailsResponse.from_proto(await runs.get_run(user_id, run_id))
+    details = RunDetailsResponse.from_proto(await runs.get_run(user_id, run_id))
+    if details.steps:
+        try:
+            if store := screenshot_store():
+                indices = await store.list_steps(details.run.id)
+                for step in details.steps:
+                    step.has_screenshot = step.index in indices
+        except (BotoCoreError, ClientError) as error:
+            logger.warning(
+                "Снимки прогона %s недоступны (%s)", details.run.id, type(error).__name__
+            )
+    return details
+
+
+@router.get("/runs/{run_id}/screenshots/{index}", summary="Скриншот шага")
+async def get_screenshot(
+    run_id: str, user_id: CurrentUserId, runs: RunsClientDep, index: int = Path(ge=0)
+) -> Response:
+    details = await runs.get_run(user_id, run_id)
+    if any(step.index == index for step in details.steps):
+        try:
+            if store := screenshot_store():
+                if image := await store.get(details.run.id, index):
+                    return Response(
+                        image,
+                        media_type="image/jpeg",
+                        headers={
+                            "Cache-Control": "private, no-store",
+                            "X-Content-Type-Options": "nosniff",
+                        },
+                    )
+        except (BotoCoreError, ClientError) as error:
+            logger.warning(
+                "Снимок прогона %s недоступен (%s)", details.run.id, type(error).__name__
+            )
+            raise GatewayError(
+                503, "SCREENSHOT_UNAVAILABLE", "Скриншот временно недоступен"
+            ) from None
+    raise GatewayError(404, "SCREENSHOT_NOT_FOUND", "Скриншот не найден")
 
 
 @router.post("/runs/{run_id}/cancel", summary="Отменить прогон")

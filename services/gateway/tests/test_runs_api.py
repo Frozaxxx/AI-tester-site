@@ -1,7 +1,9 @@
 import uuid
+from unittest.mock import AsyncMock
 
 from httpx import AsyncClient
 
+from app.api.v1 import runs as runs_api
 from tests.conftest import make_access_token
 
 PROJECT = {"name": "Магазин", "base_url": "https://shop.example.com"}
@@ -82,3 +84,26 @@ async def test_foreign_project_and_run_are_not_found(client: AsyncClient) -> Non
     assert (await client.get(f"/api/v1/projects/{project_id}/runs")).status_code == 404
     assert (await client.get(f"/api/v1/runs/{run_id}")).status_code == 404
     assert (await client.post(f"/api/v1/runs/{run_id}/cancel")).status_code == 404
+
+
+async def test_only_run_owner_can_open_screenshot(client: AsyncClient, monkeypatch) -> None:
+    store = AsyncMock()
+    store.list_steps.return_value = {0}
+    store.get.return_value = b"\xff\xd8fixture\xff\xd9"
+    monkeypatch.setattr(runs_api, "screenshot_store", lambda: store)
+
+    login_as(client, str(uuid.uuid4()))
+    project_id = await create_project(client)
+    run_id = (await client.post(f"/api/v1/projects/{project_id}/runs", json={})).json()["id"]
+    url = f"/api/v1/runs/{run_id}"
+    details = await client.get(url)
+    assert details.json()["steps"][0]["has_screenshot"] is True
+    image = await client.get(f"{url}/screenshots/0")
+    assert image.status_code == 200
+    assert image.headers["content-type"] == "image/jpeg"
+    assert image.content == store.get.return_value
+    assert (await client.get(f"{url}/screenshots/1")).status_code == 404
+
+    login_as(client, str(uuid.uuid4()))
+    assert (await client.get(f"{url}/screenshots/0")).status_code == 404
+    store.get.assert_awaited_once_with(run_id, 0)

@@ -155,6 +155,15 @@ class SiteBrowser:
             url=page.url, title=title, text=text[:SNAPSHOT_TEXT_MAX], elements=elements
         )
 
+    async def screenshot(self) -> bytes:
+        return await self._page.screenshot(
+            type="jpeg",
+            quality=75,
+            timeout=2_500,
+            animations="disabled",
+            mask=[self._page.locator('input[type="password"]')],
+        )
+
     async def perform(self, action: Action) -> ActionResult:
         """Выполняет одно действие на странице и сообщает, получилось ли оно."""
         try:

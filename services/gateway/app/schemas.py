@@ -123,6 +123,7 @@ class StepResponse(BaseModel):
     locator: str | None
     value: str | None
     error: str | None
+    has_screenshot: bool = False
 
     @classmethod
     def from_proto(cls, step: runs_pb2.Step) -> "StepResponse":

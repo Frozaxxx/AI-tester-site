@@ -2,12 +2,21 @@ import asyncio
 import logging
 
 from app.application.codegen import generate_test
-from app.application.interfaces import Agent, Browser, BrowserFactory, Notifier, Projects, Runs
+from app.application.interfaces import (
+    Agent,
+    Browser,
+    BrowserFactory,
+    Notifier,
+    Projects,
+    Runs,
+    Screenshots,
+)
 from app.domain.entities import Action, ActionResult, Job, PageProblem, ProblemKind
 from app.domain.exceptions import RunCancelledError
 
 RUN_TIMEOUT_SECONDS = 600
 HEARTBEAT_INTERVAL_SECONDS = 10
+MAX_SCREENSHOTS = 8
 BLOCKED_MARKERS = ("ERR_BLOCKED_BY_CLIENT", "заблокирован")
 
 logger = logging.getLogger("runner")
@@ -27,12 +36,17 @@ def navigation_problem(action: Action, result: ActionResult) -> PageProblem | No
 
 
 class RunRecorder:
-    def __init__(self, runs: Runs, run_id: str, browser: Browser) -> None:
+    def __init__(
+        self, runs: Runs, run_id: str, browser: Browser, screenshots: Screenshots | None = None
+    ) -> None:
         self._runs = runs
         self._run_id = run_id
         self._browser = browser
         self._index = -1
         self._seen: set[str] = set()
+        self._screenshots = screenshots
+        self._captured: set[int] = set()
+        self._capture_attempts = 0
 
     async def step(self, action: Action, result: ActionResult) -> list[str]:
         """Записывает шаг и новые проблемы страницы, возвращает их заголовки."""
@@ -45,11 +59,40 @@ class RunRecorder:
         for problem in problems:
             if await self._add(problem):
                 recorded.append(problem.title)
+        if not result.ok or recorded:
+            await self.screenshot()
         return recorded
 
     async def bug(self, problem: PageProblem) -> bool:
         """Записывает баг, который заметил агент, и возвращает False, если такой уже был."""
-        return await self._add(problem)
+        if await self._add(problem):
+            await self.screenshot()
+            return True
+        return False
+
+    async def screenshot(self) -> bool:
+        if self._index in self._captured:
+            return True
+        if (
+            self._screenshots is None
+            or self._index < 0
+            or self._capture_attempts >= MAX_SCREENSHOTS
+        ):
+            return False
+        self._capture_attempts += 1
+        try:
+            image = await self._browser.screenshot()
+            await self._screenshots.save(self._run_id, self._index, image)
+        except Exception as error:
+            logger.warning(
+                "Скриншот шага %s прогона %s не сохранён (%s)",
+                self._index,
+                self._run_id,
+                type(error).__name__,
+            )
+            return False
+        self._captured.add(self._index)
+        return True
 
     async def _add(self, problem: PageProblem) -> bool:
         """Записывает проблему на последнем шаге, если такой же ещё не было в прогоне."""
@@ -73,12 +116,14 @@ class RunWorker:
         browser_factory: BrowserFactory,
         agent: Agent,
         notifier: Notifier | None = None,
+        screenshots: Screenshots | None = None,
     ) -> None:
         self._runs = runs
         self._projects = projects
         self._browser_factory = browser_factory
         self._agent = agent
         self._notifier = notifier
+        self._screenshots = screenshots
 
     async def run_once(self) -> bool:
         """Берёт один прогон из очереди и выполняет его, а при пустой очереди возвращает False."""
@@ -153,7 +198,7 @@ class RunWorker:
     async def _execute(self, job: Job) -> list[Action]:
         """Запускает агента на сайте проекта и возвращает выполненные им действия."""
         async with self._browser_factory(job.base_url) as browser:
-            recorder = RunRecorder(self._runs, job.run_id, browser)
+            recorder = RunRecorder(self._runs, job.run_id, browser, self._screenshots)
             return await self._agent.run(job, browser, recorder)
 
     async def _save_test(self, job: Job, actions: list[Action]) -> None:

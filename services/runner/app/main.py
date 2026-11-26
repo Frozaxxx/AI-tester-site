@@ -12,6 +12,7 @@ from app.infra.browser import SiteBrowser
 from app.infra.clients.projects import ProjectsClient
 from app.infra.clients.runs import RunsClient
 from app.infra.llm import make_chat_model
+from app.infra.screenshots import S3Screenshots
 from app.infra.telegram import TelegramNotifier
 
 logger = logging.getLogger("runner")
@@ -35,6 +36,7 @@ async def work() -> None:
             _browser,
             agent,
             TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id),
+            screenshots=S3Screenshots(settings) if settings.s3_bucket else None,
         )
         loop = WorkLoop(worker, settings.poll_interval_seconds)
         broker = make_broker(settings.rabbitmq_url, loop)

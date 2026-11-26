@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
@@ -23,6 +24,12 @@ class Settings(BaseSettings):
     gigachat_ca_bundle_file: str | None = None
     openrouter_api_key: str | None = None
     openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    s3_bucket: str = Field(default="", validation_alias="S3_BUCKET")
+    s3_endpoint_url: str | None = Field(default=None, validation_alias="S3_ENDPOINT_URL")
+    s3_access_key: str | None = Field(default=None, validation_alias="S3_ACCESS_KEY")
+    s3_secret_key: str | None = Field(default=None, validation_alias="S3_SECRET_KEY")
+    s3_region: str = Field(default="us-east-1", validation_alias="S3_REGION")
+    s3_create_bucket: bool = Field(default=False, validation_alias="S3_CREATE_BUCKET")
 
 
 settings = Settings()

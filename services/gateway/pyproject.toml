@@ -10,6 +10,7 @@ dependencies = [
     "protobuf>=7.35",
     "pyjwt[crypto]>=2.8",
     "redis>=5.0",
+    "boto3>=1.40",
 ]
 
 [dependency-groups]

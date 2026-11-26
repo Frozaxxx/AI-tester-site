@@ -46,6 +46,9 @@ class Browser(Protocol):
     async def snapshot(self) -> PageSnapshot:
         """Снимает состояние страницы для агента."""
 
+    async def screenshot(self) -> bytes:
+        """Снимает видимую часть страницы."""
+
     def take_problems(self) -> list[PageProblem]:
         """Отдаёт найденные на страницах проблемы."""
 
@@ -59,6 +62,14 @@ class Recorder(Protocol):
 
     async def tokens(self, count: int) -> None:
         """Учитывает потраченные токены LLM."""
+
+    async def screenshot(self) -> bool:
+        """Сохраняет снимок на текущем шаге."""
+
+
+class Screenshots(Protocol):
+    async def save(self, run_id: str, step_index: int, image: bytes) -> None:
+        """Сохраняет изображение шага."""
 
 
 class Agent(Protocol):
