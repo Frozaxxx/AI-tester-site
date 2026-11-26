@@ -3,10 +3,12 @@ from langchain_core.language_models import BaseChatModel
 from app.config import Settings
 
 
-def make_chat_model(settings: Settings) -> BaseChatModel | None:
-    """Создаёт LLM выбранного провайдера, а без провайдера возвращает None для режима без LLM."""
+def make_chat_model(settings: Settings) -> BaseChatModel:
+    """Создаёт обязательную для прогона LLM выбранного провайдера."""
     match settings.llm_provider:
         case "gigachat":
+            if not settings.gigachat_credentials or settings.gigachat_credentials == "change-me":
+                raise ValueError("Для GigaChat задайте RUNNER_GIGACHAT_CREDENTIALS")
             from langchain_gigachat.chat_models import GigaChat
 
             return GigaChat(
@@ -17,6 +19,8 @@ def make_chat_model(settings: Settings) -> BaseChatModel | None:
                 timeout=60,
             )
         case "openrouter":
+            if not settings.openrouter_api_key:
+                raise ValueError("Для OpenRouter задайте RUNNER_OPENROUTER_API_KEY")
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
@@ -25,6 +29,4 @@ def make_chat_model(settings: Settings) -> BaseChatModel | None:
                 model=settings.openrouter_model,
                 timeout=60,
             )
-        case "none":
-            return None
     raise ValueError(f"Неизвестный провайдер LLM: {settings.llm_provider}")

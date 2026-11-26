@@ -154,7 +154,8 @@ function ProjectPanel({ project, initialRunId, locked, onDelete }: {
         <h1>{project.name}</h1>
         <p className="muted">{project.base_url}</p>
         <div className="actions">
-          <select value={scenarioId} disabled={busy} onChange={event => setScenarioId(event.target.value)} aria-label="Сценарий проверки">
+          <select value={scenarioId} disabled={busy} onChange={event => setScenarioId(event.target.value)}
+            aria-label="Сценарий проверки" aria-describedby="run-mode-hint">
             <option value="">Свободное исследование</option>
             {scenarios.data?.map(scenario => <option key={scenario.id} value={scenario.id}>{scenario.title}</option>)}
           </select>
@@ -165,7 +166,9 @@ function ProjectPanel({ project, initialRunId, locked, onDelete }: {
             onDelete(project.id);
           })}>Удалить проект</button>
         </div>
-        <p className="muted small">Без LLM раннер проверяет загрузку указанной страницы.</p>
+        <p id="run-mode-hint" className="muted small">{scenarioId
+          ? "Модель выполняет шаги выбранного сценария."
+          : "Модель исследует сайт со стартовой страницы и продолжает проверку после находок."}</p>
         <details>
           <summary>Сценарии проверки</summary>
           {scenarios.error && <p role="alert" className="error">{scenarios.error} <button onClick={scenarios.reload}>Повторить</button></p>}

@@ -28,8 +28,7 @@ async def work() -> None:
         grpc.aio.insecure_channel(settings.runs_grpc_address) as runs_channel,
         grpc.aio.insecure_channel(settings.projects_grpc_address) as projects_channel,
     ):
-        model = make_chat_model(settings)
-        agent = LlmAgent(model) if model is not None else None
+        agent = LlmAgent(make_chat_model(settings))
         worker = RunWorker(
             RunsClient(runs_channel),
             ProjectsClient(projects_channel),

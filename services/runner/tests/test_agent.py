@@ -1,10 +1,9 @@
-import pytest
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
-from app.application.agent import LlmAgent, SmokeAgent, refusal, to_action
+from app.application.agent import LlmAgent, refusal, to_action
 from app.domain.entities import (
     Action,
     ActionResult,
@@ -170,6 +169,7 @@ async def test_failed_actions_do_not_reach_test(site_url: str) -> None:
     model = ScriptedModel(
         script=[
             ("act", {"action": "click", "element": 999}),
+            ("act", {"action": "unknown_action"}),
             ("act", {"action": "goto", "value": "/about"}),
             ("finish", {"summary": "всё"}),
         ]
@@ -179,10 +179,9 @@ async def test_failed_actions_do_not_reach_test(site_url: str) -> None:
     assert [a.name for a in actions] == ["goto"]
 
 
-@pytest.mark.parametrize("llm", [False, True])
-async def test_agent_opens_requested_path_and_query(site_url: str, llm: bool) -> None:
+async def test_agent_opens_requested_path_and_query(site_url: str) -> None:
     url = f"{site_url}/page/?path=/"
-    agent = LlmAgent(ScriptedModel(script=[None])) if llm else SmokeAgent()
+    agent = LlmAgent(ScriptedModel(script=[None]))
     async with SiteBrowser(url, allow_internal=True) as browser:
         recorder = Recorder(browser)
         actions = await agent.run(job_for(url), browser, recorder)

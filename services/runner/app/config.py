@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     rabbitmq_url: str
     allow_internal_urls: bool
     poll_interval_seconds: float
-    llm_provider: Literal["gigachat", "openrouter", "none"] = "none"
+    llm_provider: Literal["gigachat", "openrouter"] = "gigachat"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     gigachat_credentials: str | None = None

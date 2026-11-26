@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-from app.application.agent import SmokeAgent
 from app.application.codegen import generate_test
 from app.application.interfaces import Agent, Browser, BrowserFactory, Notifier, Projects, Runs
 from app.domain.entities import Action, ActionResult, Job, PageProblem, ProblemKind
@@ -72,13 +71,13 @@ class RunWorker:
         runs: Runs,
         projects: Projects,
         browser_factory: BrowserFactory,
-        agent: Agent | None = None,
+        agent: Agent,
         notifier: Notifier | None = None,
     ) -> None:
         self._runs = runs
         self._projects = projects
         self._browser_factory = browser_factory
-        self._agent = agent or SmokeAgent()
+        self._agent = agent
         self._notifier = notifier
 
     async def run_once(self) -> bool:
