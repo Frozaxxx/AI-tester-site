@@ -6,7 +6,9 @@ from app.domain.entities import Action
 from app.domain.exceptions import ActionError
 
 NEEDS_LOCATOR = frozenset({"click", "fill", "select", "check"})
-NEEDS_VALUE = frozenset({"goto", "fill", "press", "select", "expect_text", "expect_url", "wait"})
+NEEDS_VALUE = frozenset(
+    {"goto", "fill", "press", "select", "expect_text", "expect_url", "expect_page", "wait"}
+)
 ACTIONS = NEEDS_LOCATOR | NEEDS_VALUE
 WAIT_MAX_MS = 5_000
 IGNORED_CONSOLE_ERROR_PREFIXES = (
@@ -67,3 +69,9 @@ def is_same_site(base_url: str, url: str) -> bool:
     base = _site_host(urlsplit(base_url).hostname or "")
     host = _site_host(urlsplit(url).hostname or "")
     return bool(host) and (host == base or host.endswith("." + base))
+
+
+def page_address(url: str) -> tuple[str, str, str, str]:
+    """Сравнивает адреса страниц с учётом параметров и без якоря."""
+    parts = urlsplit(url)
+    return parts.scheme, parts.netloc, parts.path.rstrip("/"), parts.query

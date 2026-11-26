@@ -59,6 +59,7 @@ def test_generated_test_passes_on_clean_page(site_url: str, tmp_path: Path) -> N
     """Тест по шагам на странице без ошибок проходит."""
     actions = [
         Action(name="goto", value="/"),
+        Action(name="expect_page", value=f"{site_url}/"),
         Action(name="click", locator="role=button[name='В корзину']"),
         Action(name="expect_text", locator="#cart", value="Добавлено"),
     ]
@@ -68,6 +69,12 @@ def test_generated_test_passes_on_clean_page(site_url: str, tmp_path: Path) -> N
 
 def test_generated_test_passes_with_unload_policy_diagnostic(site_url: str, tmp_path: Path) -> None:
     actions = [Action(name="goto", value="/unload-policy")]
+    result = run_generated(generate_test(make_job(site_url), actions), tmp_path)
+    assert result.returncode == 0, result.stderr
+
+
+def test_generated_test_ignores_third_party_image(site_url: str, tmp_path: Path) -> None:
+    actions = [Action(name="goto", value="/third-party-image")]
     result = run_generated(generate_test(make_job(site_url), actions), tmp_path)
     assert result.returncode == 0, result.stderr
 

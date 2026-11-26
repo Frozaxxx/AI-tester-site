@@ -1,3 +1,6 @@
+import asyncio
+
+import pytest
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -55,6 +58,7 @@ class Recorder:
         self.bugs: list[PageProblem] = []
         self.problems: list[PageProblem] = []
         self.used_tokens = 0
+        self.screenshots: list[bytes] = []
 
     async def step(self, action: Action, result: ActionResult) -> list[str]:
         self.steps.append((action, result))
@@ -68,6 +72,10 @@ class Recorder:
 
     async def tokens(self, count: int) -> None:
         self.used_tokens += count
+
+    async def screenshot(self) -> bool:
+        self.screenshots.append(await self.browser.screenshot())
+        return True
 
 
 def element_named(name: str):
@@ -108,7 +116,7 @@ async def test_agent_walks_site_and_reports_bug(site_url: str) -> None:
     )
     async with SiteBrowser(site_url, allow_internal=True) as browser:
         recorder = Recorder(browser)
-        actions = await LlmAgent(model).run(job_for(site_url), browser, recorder)
+        actions = await LlmAgent(model).run(scenario_for(site_url), browser, recorder)
 
     assert [a.name for a in actions] == ["goto", "fill", "click", "expect_text"]
     assert actions[1].locator == 'input[name="q"]' and actions[1].value == "ноутбук"
@@ -124,7 +132,7 @@ async def test_agent_stops_at_step_limit(site_url: str) -> None:
     model = ScriptedModel(script=[("act", {"action": "wait", "value": str(i)}) for i in range(10)])
     async with SiteBrowser(site_url, allow_internal=True) as browser:
         recorder = Recorder(browser)
-        actions = await LlmAgent(model, max_steps=3).run(job_for(site_url), browser, recorder)
+        actions = await LlmAgent(model, max_steps=3).run(scenario_for(site_url), browser, recorder)
     assert len(actions) == 1 + 3
 
 
@@ -132,7 +140,7 @@ async def test_agent_ends_when_model_answers_without_tool(site_url: str) -> None
     """Если модель ответила текстом без инструмента, агент заканчивает работу."""
     model = ScriptedModel(script=[None])
     async with SiteBrowser(site_url, allow_internal=True) as browser:
-        actions = await LlmAgent(model).run(job_for(site_url), browser, Recorder(browser))
+        actions = await LlmAgent(model).run(scenario_for(site_url), browser, Recorder(browser))
     assert [a.name for a in actions] == ["goto"]
 
 
@@ -175,8 +183,10 @@ async def test_failed_actions_do_not_reach_test(site_url: str) -> None:
         ]
     )
     async with SiteBrowser(site_url, allow_internal=True) as browser:
-        actions = await LlmAgent(model).run(job_for(site_url), browser, Recorder(browser))
+        recorder = Recorder(browser)
+        actions = await LlmAgent(model, max_steps=4).run(job_for(site_url), browser, recorder)
     assert [a.name for a in actions] == ["goto"]
+    assert [action.name for action, _ in recorder.steps] == ["goto", "coverage"]
 
 
 async def test_agent_opens_requested_path_and_query(site_url: str) -> None:
@@ -193,6 +203,95 @@ async def test_agent_opens_requested_path_and_query(site_url: str) -> None:
     )
 
 
+@pytest.mark.parametrize("early_reply", [None, ("finish", {"summary": "Проверил старт"})])
+async def test_free_exploration_continues_after_findings(site_url: str, early_reply) -> None:
+    start = f"{site_url}/walk/?path=/"
+    model = ScriptedModel(script=[early_reply, click("Детали"), ("finish", {"summary": "Готово"})])
+    async with SiteBrowser(start, allow_internal=True) as browser:
+        recorder = Recorder(browser)
+        actions = await LlmAgent(model, max_steps=4).run(job_for(start), browser, recorder)
+
+    assert [action.name for action in actions] == [
+        "goto",
+        "goto",
+        "expect_page",
+        "click",
+        "expect_page",
+    ]
+    assert actions[1].value == f"{site_url}/walk-next"
+    assert all(result.ok for _, result in recorder.steps)
+    assert recorder.used_tokens == 3 * 110
+    titles = [problem.title for problem in recorder.problems]
+    assert any("Ошибка на старте" in title for title in titles)
+    assert any("Ошибка на второй странице" in title for title in titles)
+    assert "/walk-next" in model.prompts[1]
+
+
+async def test_agent_avoids_failed_retries_and_captures_evidence(site_url: str) -> None:
+    start = f"{site_url}/school-check"
+    model = ScriptedModel(
+        script=[
+            click("Главная"),
+            click("Внешняя карта"),
+            click("Поиск"),
+            ("screenshot", {}),
+            click("Недоступная кнопка"),
+            click("Недоступная кнопка"),
+            ("finish", {"summary": "Готово"}),
+        ]
+    )
+    async with SiteBrowser(start, allow_internal=True) as browser:
+        recorder = Recorder(browser)
+        actions = await LlmAgent(model).run(job_for(start), browser, recorder)
+        assert "Поиск открыт" in (await browser.snapshot()).text
+
+    assert [action.locator for action in actions] == [None, "#headSearchCollapseOpen"]
+    assert [(action.locator, result.ok) for action, result in recorder.steps] == [
+        (None, True),
+        ("#headSearchCollapseOpen", True),
+        ("#blocked", False),
+        (None, True),
+    ]
+    assert len(recorder.screenshots) == 1 and recorder.screenshots[0].startswith(b"\xff\xd8")
+
+
 def job_for(site_url: str) -> Job:
     """Создаёт задание свободного исследования сайта."""
     return Job(run_id="r", owner_id="o", project_id="p", base_url=site_url)
+
+
+def scenario_for(site_url: str) -> Job:
+    return Job(
+        run_id="r", owner_id="o", project_id="p", base_url=site_url, scenario_text="Сценарий"
+    )
+
+
+async def test_early_finish_keeps_testing_discovered_pages(site_url: str) -> None:
+    start = f"{site_url}/walk/?path=/"
+    model = ScriptedModel(script=[("finish", {"summary": "Готово"}) for _ in range(4)])
+    async with SiteBrowser(start, allow_internal=True) as browser:
+        recorder = Recorder(browser)
+        actions = await LlmAgent(model).run(job_for(start), browser, recorder)
+    assert [action.value for action in actions if action.name == "goto"] == [
+        start,
+        f"{site_url}/walk-next",
+        f"{site_url}/missing",
+        f"{site_url}/walk-last",
+    ]
+    assert "Открыто страниц: 4" in recorder.steps[-1][0].value
+    assert "Подтверждено проверок: 3" in recorder.steps[-1][0].value
+
+
+async def test_free_research_saves_coverage_at_time_limit(site_url: str, monkeypatch) -> None:
+    class SlowModel(ScriptedModel):
+        async def _agenerate(self, *args, **kwargs):
+            await asyncio.sleep(10)
+            return await super()._agenerate(*args, **kwargs)
+
+    monkeypatch.setattr("app.application.agent.FREE_MAX_SECONDS", 0.2)
+    start = f"{site_url}/long-link"
+    async with SiteBrowser(start, allow_internal=True) as browser:
+        recorder = Recorder(browser)
+        actions = await LlmAgent(SlowModel(script=[])).run(job_for(start), browser, recorder)
+    assert [action.name for action in actions] == ["goto"]
+    assert "достигнут лимит времени" in recorder.steps[-1][0].value

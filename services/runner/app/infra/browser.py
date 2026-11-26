@@ -29,6 +29,7 @@ from app.domain.exceptions import ActionError
 from app.domain.services import (
     IGNORED_CONSOLE_ERROR_PREFIXES,
     is_same_site,
+    page_address,
     resolve_internal,
     same_site_url,
     validate_action,
@@ -42,6 +43,27 @@ ERROR_MAX_LENGTH = 500
 PROBLEMS_MAX = 50
 SNAPSHOT_TEXT_MAX = 3_000
 SNAPSHOT_ELEMENTS_MAX = 60
+NAVIGATION_LINKS_MAX = 100
+NAVIGATION_LINKS_SCRIPT = """({ baseUrl, limit }) => {
+  const origin = new URL(baseUrl).origin;
+  const current = new URL(location.href);
+  current.hash = '';
+  const links = new Set();
+  for (const anchor of document.querySelectorAll('a[href]:not([download])')) {
+    if (!anchor.getClientRects().length || getComputedStyle(anchor).visibility !== 'visible') {
+      continue;
+    }
+    const url = URL.parse(anchor.href);
+    if (!url || !['http:', 'https:'].includes(url.protocol) || url.origin !== origin
+        || url.username || url.password) continue;
+    url.hash = '';
+    if (url.href === current.href || url.href.length > 2048
+        || /\\.(pdf|docx?|xlsx?|zip|rar|7z|jpg|png|mp4)$/i.test(url.pathname)) continue;
+    links.add(url.href);
+    if (links.size === limit) break;
+  }
+  return [...links];
+}"""
 SNAPSHOT_SCRIPT = """(limit) => {
   const selector = 'a[href], button, input:not([type=hidden]), select, textarea, [role=button]';
   const visible = (el) => {
@@ -65,10 +87,13 @@ SNAPSHOT_SCRIPT = """(limit) => {
   };
   const nameOf = (el) => (el.getAttribute('aria-label') || el.innerText || el.value
     || el.getAttribute('placeholder') || el.getAttribute('name') || el.getAttribute('title') || '')
-    .trim().replace(/\\s+/g, ' ').slice(0, 80);
+    .trim().replace(/\\s+/g, ' ');
   return [...document.querySelectorAll(selector)].filter(visible).slice(0, limit).map((el) => ({
     tag: el.tagName.toLowerCase(), role: roleOf(el), name: nameOf(el),
-    attr: el.getAttribute('name'), id: el.id,
+    attr: el.getAttribute('name'), id: el.id ? CSS.escape(el.id) : '',
+    href: el.tagName === 'A' ? el.href : null,
+    hrefSelector: el.matches('a[href]:not([href^="#"]):not([href=""])')
+      ? CSS.escape(el.getAttribute('href')) : '',
   }));
 }"""
 
@@ -86,7 +111,9 @@ def _quote(value: str) -> str:
 def _locator(item: dict) -> str:
     """Строит устойчивый локатор элемента: по id, по name поля или по роли и имени."""
     if item["id"]:
-        return f"id={_quote(item['id'])}"
+        return f"#{item['id']}"
+    if item["hrefSelector"]:
+        return f"a[href={item['hrefSelector']}]:visible"
     if item["attr"] and item["tag"] in ("input", "select", "textarea"):
         return f"{item['tag']}[name={_quote(item['attr'])}]"
     if item["name"]:
@@ -147,13 +174,35 @@ class SiteBrowser:
             title = await page.title()
         except Error:
             return PageSnapshot(url=page.url, title="", text="", elements=[])
-        elements = [
-            Element(index=i, role=item["role"], name=item["name"], locator=_locator(item))
-            for i, item in enumerate(raw)
-        ]
+        elements = []
+        for index, item in enumerate(raw):
+            href = item["href"]
+            external = bool(href) and (
+                urlsplit(href).scheme not in {"http", "https"}
+                or not is_same_site(self._base_url, href)
+            )
+            elements.append(
+                Element(
+                    index=index,
+                    role=item["role"],
+                    name=item["name"][:100],
+                    locator=_locator(item),
+                    href=href,
+                    external=external,
+                )
+            )
         return PageSnapshot(
             url=page.url, title=title, text=text[:SNAPSHOT_TEXT_MAX], elements=elements
         )
+
+    async def navigation_links(self) -> list[str]:
+        """Собирает уникальные адреса страниц из обычных ссылок."""
+        try:
+            return await self._page.evaluate(
+                NAVIGATION_LINKS_SCRIPT, {"baseUrl": self._base_url, "limit": NAVIGATION_LINKS_MAX}
+            )
+        except Error:
+            return []
 
     async def screenshot(self) -> bytes:
         return await self._page.screenshot(
@@ -205,6 +254,9 @@ class SiteBrowser:
             case "expect_url":
                 if action.value not in page.url:
                     raise ActionError(f"Адрес страницы {page.url} не содержит «{action.value}»")
+            case "expect_page":
+                if page_address(action.value) != page_address(page.url):
+                    raise ActionError(f"Ожидался адрес {action.value}. Открылся {page.url}")
             case "wait":
                 await page.wait_for_timeout(int(action.value))
 
@@ -285,6 +337,8 @@ class SiteBrowser:
         status = response.status
         resource = response.request.resource_type
         path = urlsplit(response.url).path
+        if status == 403 and resource == "image" and not is_same_site(self._base_url, response.url):
+            return
         if status >= 500 or (
             status >= 400 and resource in CHECKED_RESOURCES and path != "/favicon.ico"
         ):

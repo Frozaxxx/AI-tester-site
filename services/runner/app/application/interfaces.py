@@ -40,11 +40,18 @@ class Projects(Protocol):
 
 
 class Browser(Protocol):
+    @property
+    def url(self) -> str:
+        """Возвращает текущий адрес вкладки."""
+
     async def perform(self, action: Action) -> ActionResult:
         """Выполняет одно действие на странице."""
 
     async def snapshot(self) -> PageSnapshot:
         """Снимает состояние страницы для агента."""
+
+    async def navigation_links(self) -> list[str]:
+        """Возвращает ссылки на страницы в пределах исходного сайта."""
 
     async def screenshot(self) -> bytes:
         """Снимает видимую часть страницы."""

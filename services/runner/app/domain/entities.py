@@ -44,6 +44,8 @@ class Element:
     role: str
     name: str
     locator: str
+    href: str | None = None
+    external: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -57,5 +59,8 @@ class PageSnapshot:
         """Описывает страницу для LLM: адрес, текст и пронумерованные элементы."""
         lines = [f"Адрес: {self.url}", f"Заголовок: {self.title}", "Текст страницы:", self.text]
         lines.append("Элементы, с которыми можно работать:")
-        lines += [f"[{e.index}] {e.role} «{e.name}»" for e in self.elements]
+        lines += [
+            f"[{e.index}] {e.role} «{e.name}»" + (" (внешняя ссылка)" if e.external else "")
+            for e in self.elements
+        ]
         return "\n".join(lines)

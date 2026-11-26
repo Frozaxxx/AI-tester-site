@@ -5,10 +5,22 @@ from app.domain.exceptions import ActionError
 from app.domain.services import IGNORED_CONSOLE_ERROR_PREFIXES, validate_action
 
 HEADER = '''from playwright.sync_api import Page, expect
+from urllib.parse import urlsplit
 
 BASE_URL = {base_url}
 CHECKED_RESOURCES = {{"document", "xhr", "fetch", "script", "stylesheet", "image"}}
 IGNORED_CONSOLE_ERROR_PREFIXES = {ignored_console_errors!r}
+
+
+def _is_site_image(url: str) -> bool:
+    base = (urlsplit(BASE_URL).hostname or "").removeprefix("www.")
+    host = (urlsplit(url).hostname or "").removeprefix("www.")
+    return host == base or host.endswith("." + base)
+
+
+def _page_address(url: str) -> tuple[str, str, str, str]:
+    parts = urlsplit(url)
+    return parts.scheme, parts.netloc, parts.path.rstrip("/"), parts.query
 
 
 def test_run_{name}(page: Page) -> None:
@@ -28,6 +40,11 @@ def test_run_{name}(page: Page) -> None:
             or (response.status >= 400 and response.request.resource_type in CHECKED_RESOURCES)
         )
         and not response.url.endswith("/favicon.ico")
+        and (
+            response.status != 403
+            or response.request.resource_type != "image"
+            or _is_site_image(response.url)
+        )
         and errors.append(f"{{response.status}} {{response.url}}"),
     )
 '''
@@ -72,6 +89,8 @@ def _line(action: Action, base_url: str) -> str:
             return f"expect({where}).to_contain_text({action.value!r})"
         case "expect_url":
             return f"assert {action.value!r} in page.url"
+        case "expect_page":
+            return f"assert _page_address(page.url) == _page_address({action.value!r})"
         case "wait":
             return f"page.wait_for_timeout({int(action.value)})"
     raise ValueError(f"Неизвестное действие {action.name}")

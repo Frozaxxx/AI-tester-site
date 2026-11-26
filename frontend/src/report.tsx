@@ -33,6 +33,11 @@ export function RunReport({ runId, pollMs, onChange }: {
   const action = useAction();
   const result = report.data;
   const active = result?.run.status === "queued" || result?.run.status === "running";
+  const coverage = result?.steps.find(step => step.action === "coverage")?.value;
+  const steps = result?.steps.filter(step => step.action !== "coverage") ?? [];
+  const started = result?.run.started_at;
+  const finished = result?.run.finished_at;
+  const duration = started && finished ? Math.max(0, (Date.parse(finished) - Date.parse(started)) / 1000) : null;
 
   return (
     <section className="card" aria-labelledby="report-heading">
@@ -52,8 +57,11 @@ export function RunReport({ runId, pollMs, onChange }: {
         <>
           <div className="actions report-meta">
             <StatusBadge status={result.run.status} />
-            <span className="muted small">Шаги {result.steps.length} · Находки {result.findings.length} · Токены {result.run.tokens_used}</span>
+            <span className="muted small">Шаги {steps.length} · Находки {result.findings.length} · Токены {result.run.tokens_used}
+              {duration !== null && ` · ${Math.floor(duration / 60)} мин ${duration % 60} с`}
+            </span>
           </div>
+          {coverage && <p className="muted small">{coverage}</p>}
           <h3>Находки</h3>
           {result.findings.length === 0 && (
             <p className="muted">{active ? "Агент собирает результаты…" : "В этом прогоне ошибки не зафиксированы."}</p>
@@ -66,11 +74,11 @@ export function RunReport({ runId, pollMs, onChange }: {
             </article>
           ))}
           <details>
-            <summary>Шаги агента ({result.steps.length})</summary>
+            <summary>Шаги агента ({steps.length})</summary>
             <ol>
-              {result.steps.map(step => (
+              {steps.map(step => (
                 <li key={step.index}>
-                  {step.ok ? "Успешно" : "Ошибка"} · {step.action} {step.locator} {step.value}
+                  {step.ok ? "Успешно" : "Ошибка"} · {step.action === "expect_page" ? "Проверка адреса" : step.action} {step.locator} {step.value}
                   {step.error && <div>{step.error}</div>}
                 {step.has_screenshot && (
                   <div>

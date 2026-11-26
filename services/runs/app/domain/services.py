@@ -21,7 +21,19 @@ FINAL_STATUSES = frozenset(
     {RunStatus.PASSED, RunStatus.FAILED, RunStatus.ERROR, RunStatus.CANCELLED}
 )
 STEP_ACTIONS = frozenset(
-    {"goto", "click", "fill", "press", "select", "check", "expect_text", "expect_url", "wait"}
+    {
+        "goto",
+        "click",
+        "fill",
+        "press",
+        "select",
+        "check",
+        "expect_text",
+        "expect_url",
+        "expect_page",
+        "wait",
+        "coverage",
+    }
 )
 FINDING_TITLE_MAX_LENGTH = 300
 MAX_ACTIVE_RUNS_PER_USER = 3

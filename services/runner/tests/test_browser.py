@@ -64,6 +64,23 @@ async def test_unload_policy_diagnostic_is_not_a_finding(site_url: str) -> None:
         assert browser.take_problems() == []
 
 
+async def test_long_article_link_can_be_clicked(site_url: str) -> None:
+    async with SiteBrowser(site_url, allow_internal=True) as browser:
+        await browser.perform(Action(name="goto", value="/long-link"))
+        article = (await browser.snapshot()).elements[0]
+        assert len(article.name) == 100
+        assert (await browser.perform(Action(name="click", locator=article.locator))).ok
+        assert browser.url == f"{site_url}/walk-last?from=news"
+
+
+async def test_only_project_image_error_counts_as_finding(site_url: str) -> None:
+    async with SiteBrowser(site_url, allow_internal=True) as browser:
+        assert (await browser.perform(Action(name="goto", value="/third-party-image"))).ok
+        assert browser.take_problems() == []
+        assert (await browser.perform(Action(name="goto", value="/own-image"))).ok
+        assert [item.title for item in browser.take_problems()] == [f"403 на {site_url}/denied.png"]
+
+
 async def test_internal_addresses_are_blocked(site_url: str) -> None:
     """Без разрешения браузер не открывает локальные адреса, а с чужого сайта не уходит."""
     async with SiteBrowser(site_url) as browser:

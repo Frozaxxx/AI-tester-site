@@ -23,6 +23,8 @@ export interface Run {
   status: RunStatus;
   tokens_used: number;
   created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 }
 
 export interface RunDetails {
